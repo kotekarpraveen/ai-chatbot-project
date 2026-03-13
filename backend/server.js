@@ -9,6 +9,7 @@ import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import path from "path";
 import { scrapeWebsite } from "./websiteCrawler.js";
+import { v4 as uuidv4 } from "uuid";
 
 dotenv.config();
 
@@ -26,13 +27,25 @@ const vectorStore = new MemoryVectorStore(embeddings);
 
 // Load the persisted data
 const dataPath = "./vector_store/data.json";
+const sourcesPath = "./vector_store/sources.json";
+
 if (fs.existsSync(dataPath)) {
     const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
     vectorStore.memoryVectors = data;
     console.log("Vector store loaded from disk.");
 } else {
-    console.log("No vector store found. Please run indexDocuments.js first.");
+    console.log("No vector store found. Initializing empty store.");
+    if (!fs.existsSync("./vector_store")) fs.mkdirSync("./vector_store");
 }
+
+let sources = [];
+if (fs.existsSync(sourcesPath)) {
+    sources = JSON.parse(fs.readFileSync(sourcesPath, "utf8"));
+}
+
+const saveSources = () => {
+    fs.writeFileSync(sourcesPath, JSON.stringify(sources, null, 2));
+};
 
 
 
@@ -57,12 +70,21 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
         const chunks = text.match(/.{1,1000}/g) || [];
 
+        const sourceId = uuidv4();
         await vectorStore.addDocuments(
             chunks.map(chunk => ({
                 pageContent: chunk,
-                metadata: { source: req.file.originalname }
+                metadata: { source: req.file.originalname, sourceId }
             }))
         );
+
+        sources.push({
+            id: sourceId,
+            type: "PDF",
+            name: req.file.originalname,
+            createdAt: new Date()
+        });
+        saveSources();
 
         // Persist the updated vector store
         const jsonData = JSON.stringify(vectorStore.memoryVectors);
@@ -73,7 +95,8 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
         res.json({
             message: "Document indexed successfully",
-            chunks: chunks.length
+            chunks: chunks.length,
+            id: sourceId
         });
 
     } catch (error) {
@@ -103,13 +126,22 @@ app.post("/train-website", async (req, res) => {
 
         const chunks = text.match(/.{1,1000}/g) || [];
 
+        const sourceId = uuidv4();
         // Use addDocuments as fixed previously for MemoryVectorStore
         await vectorStore.addDocuments(
             chunks.map(chunk => ({
                 pageContent: chunk,
-                metadata: { source: url }
+                metadata: { source: url, sourceId }
             }))
         );
+
+        sources.push({
+            id: sourceId,
+            type: "Website",
+            name: url,
+            createdAt: new Date()
+        });
+        saveSources();
 
         // Persist the updated vector store
         const jsonData = JSON.stringify(vectorStore.memoryVectors);
@@ -117,7 +149,8 @@ app.post("/train-website", async (req, res) => {
 
         res.json({
             message: "Website indexed successfully",
-            chunks: chunks.length
+            chunks: chunks.length,
+            id: sourceId
         });
     } catch (error) {
         console.error("Website training error:", error);
@@ -125,6 +158,38 @@ app.post("/train-website", async (req, res) => {
             error: "Website training failed"
         });
     }
+});
+
+app.get("/sources", (req, res) => {
+    res.json(sources);
+});
+
+app.delete("/sources/:id", (req, res) => {
+    const { id } = req.params;
+    const initialCount = sources.length;
+    sources = sources.filter(s => s.id !== id);
+
+    if (sources.length === initialCount) {
+        return res.status(404).json({ error: "Source not found" });
+    }
+
+    // Filter out memory vectors that belong to this source
+    vectorStore.memoryVectors = (vectorStore.memoryVectors || []).filter(
+        v => v.metadata && v.metadata.sourceId !== id
+    );
+
+    saveSources();
+    fs.writeFileSync(dataPath, JSON.stringify(vectorStore.memoryVectors));
+
+    res.json({ message: "Source deleted successfully" });
+});
+
+app.delete("/sources", (req, res) => {
+    sources = [];
+    vectorStore.memoryVectors = [];
+    saveSources();
+    if (fs.existsSync(dataPath)) fs.writeFileSync(dataPath, JSON.stringify([]));
+    res.json({ message: "Knowledge base cleared successfully" });
 });
 
 app.post("/chat", async (req, res) => {
