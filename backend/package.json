@@ -11,7 +11,9 @@
   },
   "type": "module",
   "dependencies": {
+    "@langchain/classic": "^1.0.23",
     "@langchain/community": "^1.1.23",
+    "@langchain/core": "^1.1.32",
     "@langchain/openai": "^1.2.13",
     "chromadb": "^3.3.3",
     "cors": "^2.8.6",
