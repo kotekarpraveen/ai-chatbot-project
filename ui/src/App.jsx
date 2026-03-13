@@ -12,6 +12,8 @@ function App() {
   const [showInfo, setShowInfo] = useState(false);
 
   const chatEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,6 +52,23 @@ function App() {
 
     setLoading(false);
     setMessage("");
+  };
+
+  const uploadFile = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      await axios.post(`${API_URL}/upload`, formData);
+      alert("Document indexed successfully!");
+    } catch (error) {
+      console.error(error);
+      alert("Upload failed.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -202,24 +221,48 @@ function App() {
 
         {/* Input Area */}
         <div className="px-8 pb-8 pt-4 bg-white">
-          <div className="relative group">
+          <div className="relative group flex items-center gap-3">
             <input
-              className="w-full bg-[#f8fbff] border-2 border-transparent focus:border-blue-100 focus:bg-white rounded-2xl py-5 px-6 pr-24 outline-none transition-all placeholder:text-gray-400 text-[#1a2b4b] shadow-inner"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder="Ask anything about the documents..."
+              type="file"
+              ref={fileInputRef}
+              onChange={(e) => uploadFile(e.target.files[0])}
+              className="hidden"
+              accept=".pdf"
             />
             <button
-              onClick={sendMessage}
-              disabled={loading || !message.trim()}
-              className="absolute right-3 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white font-bold py-2.5 px-6 rounded-xl transition-all shadow-lg shadow-blue-200 active:scale-95 flex items-center gap-2"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className={`p-4 rounded-2xl border-2 transition-all ${uploading ? 'bg-gray-50 border-gray-100 text-gray-300' : 'bg-[#f8fbff] border-transparent hover:border-blue-100 text-gray-400 hover:text-blue-600'}`}
+              title="Upload PDF Document"
             >
-              <span>Ask</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
+              {uploading ? (
+                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              )}
             </button>
+            <div className="relative flex-1">
+              <input
+                className="w-full bg-[#f8fbff] border-2 border-transparent focus:border-blue-100 focus:bg-white rounded-2xl py-5 px-6 pr-24 outline-none transition-all placeholder:text-gray-400 text-[#1a2b4b] shadow-inner"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                placeholder={uploading ? "Uploading document..." : "Ask anything about the documents..."}
+                disabled={uploading}
+              />
+              <button
+                onClick={sendMessage}
+                disabled={loading || !message.trim() || uploading}
+                className="absolute right-3 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white font-bold py-2.5 px-6 rounded-xl transition-all shadow-lg shadow-blue-200 active:scale-95 flex items-center gap-2"
+              >
+                <span>Ask</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </div>
           </div>
           <p className="text-[10px] text-gray-400 text-center mt-4 uppercase tracking-[0.2em] font-bold opacity-30">
             Powered by RAG Architecture & OpenAI GPT-4o
