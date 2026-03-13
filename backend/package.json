@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "build": "npm install && node indexDocuments.js",
+    "build": "npm install --legacy-peer-deps && node indexDocuments.js",
     "dev": "node --watch server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
