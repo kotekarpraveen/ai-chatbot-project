@@ -9,6 +9,7 @@ function App() {
   ]);
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
 
   const chatEndRef = useRef(null);
 
@@ -54,13 +55,34 @@ function App() {
   return (
     <div className="h-screen bg-[#f8fbff] flex flex-row overflow-hidden font-sans">
 
+      {/* Sidebar Overlay for Mobile */}
+      {showInfo && (
+        <div
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setShowInfo(false)}
+        ></div>
+      )}
+
       {/* Sidebar: Product Information */}
-      <aside className="w-1/4 bg-white border-r border-gray-200 p-8 flex flex-col gap-8 overflow-y-auto hidden md:flex shrink-0 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-200">
-            D
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 p-8 flex flex-col gap-8 overflow-y-auto transition-transform duration-300 shadow-xl md:shadow-sm md:static md:w-1/4 md:translate-x-0
+        ${showInfo ? "translate-x-0" : "-translate-x-full"}
+      `}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-200">
+              D
+            </div>
+            <h1 className="text-2xl font-extrabold text-[#1a2b4b] tracking-tight">DocuMind AI</h1>
           </div>
-          <h1 className="text-2xl font-extrabold text-[#1a2b4b] tracking-tight">DocuMind AI</h1>
+          <button
+            onClick={() => setShowInfo(false)}
+            className="md:hidden p-2 hover:bg-gray-100 rounded-full text-gray-400"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <section className="space-y-4">
@@ -125,6 +147,15 @@ function App() {
               <span className="text-[10px] font-medium text-gray-400 uppercase tracking-tighter">Knowledge Base Active</span>
             </div>
           </div>
+          <button
+            onClick={() => setShowInfo(true)}
+            className="md:hidden flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg font-bold text-xs border border-blue-100"
+          >
+            <span>INFO</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
         </header>
 
         {/* Messages */}
