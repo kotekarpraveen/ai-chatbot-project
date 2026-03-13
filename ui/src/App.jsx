@@ -147,7 +147,9 @@ function App() {
                     ? "bg-blue-600 text-white rounded-tr-none shadow-blue-100"
                     : "bg-[#f1f5f9] text-[#1e293b] rounded-tl-none border border-gray-100"}`}
               >
-                <ReactMarkdown className="markdown-content">{c.text}</ReactMarkdown>
+                <div className="markdown-content">
+                  <ReactMarkdown>{c.text}</ReactMarkdown>
+                </div>
               </div>
             </div>
           ))}
