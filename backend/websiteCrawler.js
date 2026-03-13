@@ -1,11 +1,11 @@
 import axios from "axios";
-import cheerio from "cheerio";
+import { load } from "cheerio";
 
 export async function scrapeWebsite(url) {
 
     const { data } = await axios.get(url);
 
-    const $ = cheerio.load(data);
+    const $ = load(data);
 
     let text = "";
 
