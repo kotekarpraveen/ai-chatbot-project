@@ -8,6 +8,7 @@ import fs from "fs";
 import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import path from "path";
+import { scrapeWebsite } from "./websiteCrawler.js";
 
 dotenv.config();
 
@@ -82,6 +83,46 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         }
         res.status(500).json({
             error: "Document upload failed"
+        });
+    }
+});
+
+app.post("/train-website", async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) {
+            return res.status(400).json({ error: "URL is required" });
+        }
+
+        console.log("Training on website:", url);
+        const text = await scrapeWebsite(url);
+
+        if (!text || text.trim().length === 0) {
+            return res.status(400).json({ error: "No readable content found on the website" });
+        }
+
+        const chunks = text.match(/.{1,1000}/g) || [];
+
+        // Use addDocuments as fixed previously for MemoryVectorStore
+        await vectorStore.addDocuments(
+            chunks.map(chunk => ({
+                pageContent: chunk,
+                metadata: { source: url }
+            }))
+        );
+
+        // Persist the updated vector store
+        const jsonData = JSON.stringify(vectorStore.memoryVectors);
+        fs.writeFileSync(dataPath, jsonData);
+
+        res.json({
+            message: "Website indexed successfully",
+            chunks: chunks.length
+        });
+    } catch (error) {
+        console.error("Website training error:", error);
+        res.status(500).json({
+            error: "Website training failed"
         });
     }
 });
