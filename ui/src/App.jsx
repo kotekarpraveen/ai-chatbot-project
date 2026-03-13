@@ -14,6 +14,8 @@ function App() {
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [url, setUrl] = useState("");
+  const [training, setTraining] = useState(false);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -71,6 +73,22 @@ function App() {
     }
   };
 
+  const trainWebsite = async () => {
+    if (!url.trim()) return;
+    setTraining(true);
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      await axios.post(`${API_URL}/train-website`, { url });
+      alert("Website indexed successfully!");
+      setUrl("");
+    } catch (error) {
+      console.error(error);
+      alert("Website training failed. Please check the URL.");
+    } finally {
+      setTraining(false);
+    }
+  };
+
   return (
     <div className="h-screen bg-[#f8fbff] flex flex-row overflow-hidden font-sans">
 
@@ -109,6 +127,28 @@ function App() {
           <p className="text-gray-600 leading-relaxed text-sm">
             DocuMind AI is a state-of-the-art <strong>Retrieval-Augmented Generation (RAG)</strong> platform designed to turn your static documents into interactive knowledge.
           </p>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-xs font-bold text-blue-600 uppercase tracking-widest">Website Training</h2>
+          <div className="space-y-2">
+            <input
+              type="text"
+              placeholder="Enter website URL"
+              className="w-full bg-[#f8fbff] border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-blue-400"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+            <button
+              onClick={trainWebsite}
+              disabled={training || !url.trim()}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-blue-700 disabled:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+            >
+              {training ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : "Train Website"}
+            </button>
+          </div>
         </section>
 
         <section className="space-y-4">
