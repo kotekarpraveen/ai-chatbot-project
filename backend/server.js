@@ -56,9 +56,11 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
         const chunks = text.match(/.{1,1000}/g) || [];
 
-        await vectorStore.addTexts(
-            chunks,
-            chunks.map(() => ({ source: req.file.originalname }))
+        await vectorStore.addDocuments(
+            chunks.map(chunk => ({
+                pageContent: chunk,
+                metadata: { source: req.file.originalname }
+            }))
         );
 
         // Persist the updated vector store
