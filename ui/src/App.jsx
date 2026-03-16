@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Analytics from "./pages/Analytics";
 import Sidebar from "./components/Sidebar";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const AppLayout = () => {
   const [showInfo, setShowInfo] = useState(false);
@@ -21,11 +22,13 @@ const AppLayout = () => {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-
-        <Route path="/chatbots" element={<Chatbots />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/" element={<Chat setShowInfo={setShowInfo} />} />
-        <Route path="/analytics" element={<Analytics />} />
+        
+        <Route element={<ProtectedRoute />}>
+          <Route path="/chatbots" element={<Chatbots />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/" element={<Chat setShowInfo={setShowInfo} />} />
+          <Route path="/analytics" element={<Analytics />} />
+        </Route>
       </Routes>
     </div>
   );
