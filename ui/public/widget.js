@@ -1,12 +1,13 @@
 (function () {
     // Automatically detect the base URL from the script source
     const script = document.currentScript;
+    const chatbotId = script.getAttribute('data-chatbot') || '';
     const scriptUrl = new URL(script.src);
     const baseUrl = scriptUrl.origin;
 
     // Create and style the Iframe
     const iframe = document.createElement("iframe");
-    iframe.src = baseUrl;
+    iframe.src = baseUrl + '?chatbotId=' + chatbotId + '&embedded=true';
     iframe.style.position = "fixed";
     iframe.style.bottom = "90px";
     iframe.style.right = "20px";

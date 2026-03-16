@@ -1,22 +1,71 @@
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
+import { useLocation, Link } from "react-router-dom";
 
 function Chat({ setShowInfo }) {
+    const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
+    const chatbotId = queryParams.get("chatbotId");
+    const isEmbedded = queryParams.get("embedded") === "true";
+
     const [message, setMessage] = useState("");
     const [chat, setChat] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [chatbots, setChatbots] = useState([]);
+    const [leadCaptured, setLeadCaptured] = useState(false);
+
+    // For lead capture
+    const [name, setName] = useState("");
+    const [email, setEmail] = useState("");
+    const [capturingLead, setCapturingLead] = useState(false);
 
     const chatEndRef = useRef(null);
-    const fileInputRef = useRef(null);
-    const [uploading, setUploading] = useState(false);
+
+    // Fetch chatbots if not embedded and no chatbotId is provided
+    useEffect(() => {
+        if (!chatbotId && !isEmbedded) {
+            fetchChatbots();
+        }
+    }, [chatbotId, isEmbedded]);
+
+    const fetchChatbots = async () => {
+        try {
+            const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+            const token = localStorage.getItem("token");
+            if (token) {
+                const res = await axios.get(`${API_URL}/chatbots`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setChatbots(res.data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch chatbots for dropdown");
+        }
+    };
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chat]);
 
+    const captureLead = async (e) => {
+        e.preventDefault();
+        setCapturingLead(true);
+        try {
+            const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+            await axios.post(`${API_URL}/leads`, { chatbotId, name, email });
+            setLeadCaptured(true);
+            setChat((prev) => [...prev, { role: "assistant", content: "Thank you! Our human team will get back to you shortly." }]);
+        } catch (error) {
+            console.error("Lead capture failed");
+            alert("Failed to submit details.");
+        } finally {
+            setCapturingLead(false);
+        }
+    };
+
     const sendMessage = async () => {
-        if (!message.trim()) return;
+        if (!message.trim() || !chatbotId) return;
 
         const userMessage = { role: "user", content: message };
         setChat((prev) => [...prev, userMessage]);
@@ -26,11 +75,22 @@ function Chat({ setShowInfo }) {
         try {
             const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
             const res = await axios.post(`${API_URL}/chat`, {
-                message: message
+                message: message,
+                chatbotId: chatbotId
             });
 
             const botMessage = { role: "assistant", content: res.data.reply };
             setChat((prev) => [...prev, botMessage]);
+
+            // Randomly trigger lead capture after 3 messages if not captured yet
+            if (chat.length >= 2 && !leadCaptured) {
+                const promptLead = {
+                    role: "assistant",
+                    content: "Would you like our human team to follow up with you?",
+                    isLeadForm: true
+                };
+                setChat((prev) => [...prev, promptLead]);
+            }
         } catch (error) {
             console.error(error);
             const errorMessage = { role: "assistant", content: "Error: Could not connect to the server." };
@@ -40,80 +100,98 @@ function Chat({ setShowInfo }) {
         setLoading(false);
     };
 
-    const uploadFile = async (file) => {
-        if (!file) return;
-        setUploading(true);
-        const formData = new FormData();
-        formData.append("file", file);
-        try {
-            const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-            await axios.post(`${API_URL}/upload`, formData);
-            alert("Document indexed successfully!");
-        } catch (error) {
-            console.error(error);
-            alert("Upload failed.");
-        } finally {
-            setUploading(false);
-        }
-    };
+    if (!chatbotId && !isEmbedded) {
+        return (
+            <main className="flex-1 flex flex-col h-full bg-white md:rounded-l-[3rem] shadow-2xl items-center justify-center p-8 text-center space-y-6">
+                <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-[#1a2b4b]">Select a Chatbot to Demo</h2>
+                <p className="text-gray-500 max-w-md">You need to specify which chatbot you want to interact with. Select one of your created bots below:</p>
+
+                {chatbots.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl mt-4">
+                        {chatbots.map(bot => (
+                            <Link key={bot.id} to={`/?chatbotId=${bot.id}`} className="bg-[#f8fbff] border-2 border-gray-100 p-4 rounded-xl text-left hover:border-blue-400 hover:bg-white transition-all shadow-sm">
+                                <h3 className="font-bold text-[#1a2b4b]">{bot.name}</h3>
+                                <p className="text-xs text-gray-400 mt-1">{bot.description || 'No description'}</p>
+                            </Link>
+                        ))}
+                    </div>
+                ) : (
+                    <Link to="/chatbots" className="bg-blue-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">
+                        Create a Chatbot First
+                    </Link>
+                )}
+            </main>
+        );
+    }
 
     return (
-        <main className="flex-1 flex flex-col h-full bg-white md:rounded-l-[3rem] shadow-2xl relative overflow-hidden transition-all duration-500">
-
-            {/* Search/Header Bar */}
-            <div className="px-8 py-6 flex items-center justify-between border-b border-gray-50 backdrop-blur-md bg-white/80 sticky top-0 z-10">
+        <main className={`flex-1 flex flex-col h-full bg-white relative overflow-hidden transition-all duration-500 ${!isEmbedded ? 'md:rounded-l-[3rem] shadow-2xl' : ''}`}>
+            {/* Header Bar */}
+            <div className="px-8 py-6 flex items-center justify-between border-b border-gray-50 backdrop-blur-md bg-white/80 sticky top-0 z-10 flex-shrink-0">
                 <div className="flex items-center gap-4">
-                    <button
-                        onClick={() => setShowInfo(true)}
-                        className="md:hidden p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-colors"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                        </svg>
-                    </button>
+                    {!isEmbedded && (
+                        <button
+                            onClick={() => setShowInfo(true)}
+                            className="md:hidden p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        </button>
+                    )}
                     <div>
-                        <h2 className="text-xl font-bold text-[#1a2b4b]">Knowledge Base</h2>
+                        <h2 className="text-xl font-bold text-[#1a2b4b]">Chat Support</h2>
                         <div className="flex items-center gap-2">
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                            <p className="text-xs text-green-600 font-medium uppercase tracking-wider">AI System Active</p>
+                            <p className="text-xs text-green-600 font-medium uppercase tracking-wider">Online</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth custom-scrollbar">
                 {chat.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-6">
-                        <div className="w-24 h-24 bg-blue-50 rounded-[2rem] flex items-center justify-center text-blue-600 shadow-inner">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-6 opacity-80">
+                        <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-[2rem] flex items-center justify-center shadow-inner">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                             </svg>
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-[#1a2b4b]">Hello! I'm DocuMind AI</h3>
-                            <p className="text-gray-500 mt-2">I've indexed your documents. Ask me anything about policies, procedures, or company data.</p>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 w-full pt-4">
-                            <button onClick={() => setMessage("What are the main highlights?")} className="px-6 py-4 bg-[#f8fbff] hover:bg-blue-50 text-[#1a2b4b] text-sm font-semibold rounded-2xl border border-gray-100 transition-all text-left flex items-center justify-between group">
-                                "What are the main highlights?"
-                                <span className="opacity-0 group-hover:opacity-100 transition-opacity">→</span>
-                            </button>
+                            <h3 className="text-xl font-bold text-[#1a2b4b]">Hello!</h3>
+                            <p className="text-sm text-gray-500 mt-2">I'm a virtual assistant. How can I help you today?</p>
                         </div>
                     </div>
                 ) : (
                     chat.map((msg, index) => (
-                        <div
-                            key={index}
-                            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-4 duration-500`}
-                        >
+                        <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-4 duration-500`}>
                             <div className={`max-w-[85%] md:max-w-[75%] px-6 py-4 rounded-[2rem] shadow-sm ${msg.role === "user"
                                 ? "bg-blue-600 text-white rounded-tr-none shadow-blue-200"
                                 : "bg-[#f8fbff] text-[#1a2b4b] rounded-tl-none border border-gray-100"
                                 }`}>
-                                <div className={`text-sm ${msg.role === "user" ? "leading-relaxed" : "leading-relaxed prose prose-slate prose-sm max-w-none"}`}>
-                                    <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                </div>
+
+                                {msg.isLeadForm ? (
+                                    <div className="space-y-4">
+                                        <div className="text-sm leading-relaxed"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
+                                        {!leadCaptured && (
+                                            <form onSubmit={captureLead} className="space-y-3 bg-white p-4 rounded-xl border border-blue-100 mt-2">
+                                                <input required type="text" placeholder="Your Name" value={name} onChange={e => setName(e.target.value)} className="w-full text-sm p-3 rounded-lg bg-gray-50 border border-gray-100 outline-none focus:border-blue-400" />
+                                                <input required type="email" placeholder="Your Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full text-sm p-3 rounded-lg bg-gray-50 border border-gray-100 outline-none focus:border-blue-400" />
+                                                <button disabled={capturingLead} type="submit" className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-blue-700 transition">
+                                                    {capturingLead ? 'Submitting...' : 'Have someone contact me'}
+                                                </button>
+                                            </form>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className={`text-sm ${msg.role === "user" ? "leading-relaxed" : "leading-relaxed prose prose-slate prose-sm max-w-none"}`}>
+                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))
@@ -133,53 +211,30 @@ function Chat({ setShowInfo }) {
             </div>
 
             {/* Input Area */}
-            <div className="px-8 pb-8 pt-4 bg-white">
-                <div className="relative group flex items-center gap-3">
+            <div className="px-5 pb-5 pt-3 bg-white flex-shrink-0 border-t border-gray-50">
+                <div className="relative flex items-center">
                     <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={(e) => uploadFile(e.target.files[0])}
-                        className="hidden"
-                        accept=".pdf"
+                        className="w-full bg-[#f8fbff] border-2 border-transparent focus:border-blue-100 focus:bg-white rounded-[1.5rem] py-4 px-6 pr-20 outline-none transition-all placeholder:text-gray-400 text-[#1a2b4b]"
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                        placeholder="Type your message..."
                     />
                     <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                        className={`p-4 rounded-2xl border-2 transition-all ${uploading ? 'bg-gray-50 border-gray-100 text-gray-300' : 'bg-[#f8fbff] border-transparent hover:border-blue-100 text-gray-400 hover:text-blue-600'}`}
-                        title="Upload PDF Document"
+                        onClick={sendMessage}
+                        disabled={loading || !message.trim()}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:shadow-none text-white w-12 h-12 rounded-[1rem] transition-all shadow-md shadow-blue-200 active:scale-95 flex items-center justify-center"
                     >
-                        {uploading ? (
-                            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                        ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                        )}
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
                     </button>
-                    <div className="relative flex-1">
-                        <input
-                            className="w-full bg-[#f8fbff] border-2 border-transparent focus:border-blue-100 focus:bg-white rounded-2xl py-5 px-6 pr-24 outline-none transition-all placeholder:text-gray-400 text-[#1a2b4b] shadow-inner"
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                            placeholder={uploading ? "Uploading document..." : "Ask anything about the documents..."}
-                            disabled={uploading}
-                        />
-                        <button
-                            onClick={sendMessage}
-                            disabled={loading || !message.trim() || uploading}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white font-bold py-2.5 px-6 rounded-xl transition-all shadow-lg shadow-blue-200 active:scale-95 flex items-center gap-2"
-                        >
-                            <span>Ask</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                            </svg>
-                        </button>
-                    </div>
                 </div>
-                <p className="text-[10px] text-gray-400 text-center mt-4 uppercase tracking-[0.2em] font-bold opacity-30">
-                    Powered by RAG Architecture & OpenAI GPT-4o
-                </p>
+                {!isEmbedded && (
+                    <p className="text-[10px] text-gray-400 text-center mt-3 uppercase tracking-[0.2em] font-bold opacity-30">
+                        SaaS Platform MVP Backend
+                    </p>
+                )}
             </div>
         </main>
     );

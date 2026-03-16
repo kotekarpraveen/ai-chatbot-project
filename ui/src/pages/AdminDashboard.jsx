@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useLocation, Link } from "react-router-dom";
 
 const AdminDashboard = () => {
+    const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
+    const chatbotId = queryParams.get("chatbotId");
+
     const [sources, setSources] = useState([]);
     const [url, setUrl] = useState("");
     const [uploadLoading, setUploadLoading] = useState(false);
@@ -13,12 +18,16 @@ const AdminDashboard = () => {
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
     useEffect(() => {
-        fetchSources();
-    }, []);
+        if (chatbotId) fetchSources();
+    }, [chatbotId]);
+
+    const getAuthHeaders = () => ({
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+    });
 
     const fetchSources = async () => {
         try {
-            const res = await axios.get(`${API_URL}/sources`);
+            const res = await axios.get(`${API_URL}/sources?chatbotId=${chatbotId}`, getAuthHeaders());
             setSources(res.data);
         } catch (error) {
             console.error("Error fetching sources:", error);
@@ -32,9 +41,10 @@ const AdminDashboard = () => {
         setUploadLoading(true);
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("chatbotId", chatbotId);
 
         try {
-            await axios.post(`${API_URL}/upload`, formData);
+            await axios.post(`${API_URL}/upload`, formData, getAuthHeaders());
             alert("Document uploaded and indexed successfully!");
             fetchSources();
         } catch (error) {
@@ -51,7 +61,7 @@ const AdminDashboard = () => {
 
         setTrainLoading(true);
         try {
-            await axios.post(`${API_URL}/train-website`, { url });
+            await axios.post(`${API_URL}/train-website`, { url, chatbotId }, getAuthHeaders());
             alert("Website trained successfully!");
             setUrl("");
             fetchSources();
@@ -68,7 +78,7 @@ const AdminDashboard = () => {
 
         setDeleteLoading(id);
         try {
-            await axios.delete(`${API_URL}/sources/${id}`);
+            await axios.delete(`${API_URL}/sources/${id}`, getAuthHeaders());
             fetchSources();
         } catch (error) {
             console.error("Delete failed:", error);
@@ -94,11 +104,23 @@ const AdminDashboard = () => {
         }
     };
 
+    if (!chatbotId) {
+        return (
+            <main className="flex-1 flex flex-col h-full bg-white md:rounded-l-[3rem] shadow-2xl items-center justify-center">
+                <h2 className="text-xl font-bold text-gray-500 mb-4">Please select a chatbot to manage</h2>
+                <Link to="/chatbots" className="bg-blue-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-blue-700">Go to Chatbots</Link>
+            </main>
+        );
+    }
+
     return (
         <main className="flex-1 flex flex-col h-full bg-white md:rounded-l-[3rem] shadow-2xl relative overflow-hidden transition-all duration-500">
-            <div className="px-8 py-6 border-b border-gray-50 backdrop-blur-md bg-white/80 sticky top-0 z-10">
-                <h2 className="text-xl font-bold text-[#1a2b4b]">Chatbot Admin Dashboard</h2>
-                <p className="text-xs text-gray-500">Manage knowledge sources and training data</p>
+            <div className="px-8 py-6 border-b border-gray-50 backdrop-blur-md bg-white/80 sticky top-0 z-10 flex justify-between items-center">
+                <div>
+                    <h2 className="text-xl font-bold text-[#1a2b4b]">Knowledge Base</h2>
+                    <p className="text-xs text-gray-500">Manage knowledge sources for this chatbot</p>
+                </div>
+                <Link to="/chatbots" className="text-sm font-bold text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-xl transition-all">← Back</Link>
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
