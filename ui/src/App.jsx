@@ -6,6 +6,7 @@ import Chatbots from "./pages/Chatbots";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Analytics from "./pages/Analytics";
+import Billing from "./pages/Billing";
 import Sidebar from "./components/Sidebar";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -28,6 +29,7 @@ const AppLayout = () => {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/" element={<Chat setShowInfo={setShowInfo} />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/billing" element={<Billing />} />
         </Route>
       </Routes>
     </div>

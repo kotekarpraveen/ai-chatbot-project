@@ -51,6 +51,27 @@ CREATE TABLE IF NOT EXISTS leads (
     message TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id),
+    plan TEXT,
+    status TEXT,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    current_period_start TIMESTAMP,
+    current_period_end TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS usage_tracking (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id),
+    chatbot_id UUID REFERENCES chatbots(id) ON DELETE CASCADE,
+    month TEXT, -- e.g. "2024-03"
+    messages_used INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 `;
 
 const init = async () => {

@@ -38,7 +38,8 @@ export default function Chatbots() {
             setDescription("");
             fetchChatbots();
         } catch (error) {
-            alert("Failed to create chatbot");
+            const errorMsg = error.response?.data?.error || "Failed to create chatbot";
+            alert(errorMsg);
         } finally {
             setLoading(false);
         }

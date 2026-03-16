@@ -1,11 +1,37 @@
 import { Link, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import axios from "axios";
 
 const Sidebar = ({ showInfo, setShowInfo }) => {
     const location = useLocation();
+    const [usage, setUsage] = useState(0);
+    const [plan, setPlan] = useState("Free");
+
+    useEffect(() => {
+        const fetchUsage = async () => {
+            const token = localStorage.getItem("token");
+            if (!token) return;
+            try {
+                const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+                const [usageRes, subRes] = await Promise.all([
+                    axios.get(`${API_URL}/billing/usage`, { headers: { Authorization: `Bearer ${token}` } }),
+                    axios.get(`${API_URL}/billing/subscription`, { headers: { Authorization: `Bearer ${token}` } })
+                ]);
+                setUsage(usageRes.data.messagesUsed || 0);
+                setPlan(subRes.data.plan || "Free");
+            } catch (error) {
+                console.error("Sidebar usage fetch failed");
+            }
+        };
+        fetchUsage();
+    }, [location.pathname]);
+
+    const limit = plan === "Pro" ? 10000 : (plan === "Enterprise" ? Infinity : 1000);
+    const usagePercent = limit === Infinity ? 0 : Math.min(100, (usage / limit) * 100);
 
     const menuItems = [
         {
-            name: "Dashboard / Chatbots",
+            name: "Chatbots",
             path: "/chatbots",
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -24,11 +50,20 @@ const Sidebar = ({ showInfo, setShowInfo }) => {
             )
         },
         {
-            name: "Analytics",
+            name: "Leads",
             path: "/analytics",
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v10m14 0v-4a2 2 0 00-2-2h-2a2 2 0 00-2 2v4a2 2 0 002 2h2a2 2 0 002-2zm0 0V5a2 2 0 00-2-2h-2a2 2 0 00-2 2v14m-7 0h14" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            )
+        },
+        {
+            name: "Billing",
+            path: "/billing",
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
             )
         },
@@ -46,32 +81,18 @@ const Sidebar = ({ showInfo, setShowInfo }) => {
 
     return (
         <>
-            {/* Sidebar Overlay for Mobile */}
             {showInfo && (
-                <div
-                    className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
-                    onClick={() => setShowInfo(false)}
-                ></div>
+                <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden" onClick={() => setShowInfo(false)}></div>
             )}
 
-            <aside className={`
-        fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 p-8 flex flex-col gap-8 overflow-y-auto transition-transform duration-300 shadow-xl md:shadow-sm md:static md:w-80 md:translate-x-0
-        ${showInfo ? "translate-x-0" : "-translate-x-full"}
-      `}>
+            <aside className={`fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 p-8 flex flex-col gap-8 overflow-y-auto transition-transform duration-300 shadow-xl md:shadow-sm md:static md:w-80 md:translate-x-0 ${showInfo ? "translate-x-0" : "-translate-x-full"}`}>
                 <div className="flex items-center justify-between">
                     <Link to="/" className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-200">
-                            D
-                        </div>
+                        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-200">D</div>
                         <h1 className="text-2xl font-extrabold text-[#1a2b4b] tracking-tight">DocuMind AI</h1>
                     </Link>
-                    <button
-                        onClick={() => setShowInfo(false)}
-                        className="md:hidden p-2 hover:bg-gray-100 rounded-full text-gray-400"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                    <button onClick={() => setShowInfo(false)} className="md:hidden p-2 hover:bg-gray-100 rounded-full text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
 
@@ -93,8 +114,19 @@ const Sidebar = ({ showInfo, setShowInfo }) => {
                     ))}
                 </nav>
 
-                <section className="bg-blue-50/50 p-6 rounded-[2rem] border border-blue-50 space-y-3 mt-auto">
-                    <h2 className="text-xs font-bold text-blue-600 uppercase tracking-widest">Platform Status</h2>
+                {/* Usage Card */}
+                <section className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 space-y-4">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        <span>Usage Tracker</span>
+                        <span className={usagePercent > 80 ? 'text-red-500' : 'text-blue-600'}>{Math.round(usagePercent)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                        <div className={`h-full transition-all duration-500 ${usagePercent > 80 ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${usagePercent}%` }}></div>
+                    </div>
+                    <Link to="/billing" className="block text-[10px] text-blue-600 font-bold hover:underline">Upgrade Plan</Link>
+                </section>
+
+                <section className="bg-blue-50/50 p-6 rounded-[2rem] border border-blue-50 space-y-3">
                     <div className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
                         <p className="text-[10px] text-gray-500 font-bold uppercase">All Systems Normal</p>
@@ -107,9 +139,7 @@ const Sidebar = ({ showInfo, setShowInfo }) => {
                     </button>
                 </section>
 
-                <p className="text-[10px] text-gray-400 text-center uppercase tracking-[0.2em] font-bold opacity-30">
-                    v2.1.0 Cloud Enterprise
-                </p>
+                <p className="text-[10px] text-gray-400 text-center uppercase tracking-[0.2em] font-bold opacity-30">v2.5.0 Enterprise</p>
             </aside>
         </>
     );

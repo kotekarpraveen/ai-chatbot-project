@@ -1,6 +1,7 @@
 import express from 'express';
 import pool from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { checkPlanLimits } from '../middleware/usage.js';
 
 const router = express.Router();
 
@@ -17,9 +18,8 @@ router.get('/', authenticateToken, async (req, res) => {
         res.status(500).json({ error: "Failed to fetch chatbots" });
     }
 });
-
 // Create a new chatbot
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, checkPlanLimits, async (req, res) => {
     const { name, description } = req.body;
 
     if (!name) {

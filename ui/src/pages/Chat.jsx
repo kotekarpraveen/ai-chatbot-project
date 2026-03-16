@@ -93,7 +93,8 @@ function Chat({ setShowInfo }) {
             }
         } catch (error) {
             console.error(error);
-            const errorMessage = { role: "assistant", content: "Error: Could not connect to the server." };
+            const errorMsg = error.response?.data?.error || "Error: Could not connect to the server.";
+            const errorMessage = { role: "assistant", content: errorMsg };
             setChat((prev) => [...prev, errorMessage]);
         }
 

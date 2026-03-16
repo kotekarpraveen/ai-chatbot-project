@@ -48,8 +48,8 @@ const AdminDashboard = () => {
             alert("Document uploaded and indexed successfully!");
             fetchSources();
         } catch (error) {
-            console.error("Upload failed:", error);
-            alert("Upload failed. Please try again.");
+            const errorMsg = error.response?.data?.error || "Upload failed. Please try again.";
+            alert(errorMsg);
         } finally {
             setUploadLoading(false);
             if (fileInputRef.current) fileInputRef.current.value = "";
@@ -66,8 +66,8 @@ const AdminDashboard = () => {
             setUrl("");
             fetchSources();
         } catch (error) {
-            console.error("Website training failed:", error);
-            alert("Website training failed. Please check the URL.");
+            const errorMsg = error.response?.data?.error || "Website training failed. Please check the URL.";
+            alert(errorMsg);
         } finally {
             setTrainLoading(false);
         }

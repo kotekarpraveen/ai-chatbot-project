@@ -15,7 +15,9 @@ import authRoutes from './routes/auth.js';
 import chatbotsRoutes from './routes/chatbots.js';
 import leadsRoutes from './routes/leads.js';
 import analyticsRoutes from './routes/analytics.js';
+import billingRoutes from './routes/billing.js';
 import { authenticateToken } from './middleware/auth.js';
+import { checkPlanLimits, incrementUsage } from './middleware/usage.js';
 import pool from './db.js';
 
 dotenv.config();
@@ -23,12 +25,17 @@ dotenv.config();
 const upload = multer({ dest: "uploads/" });
 const app = express();
 app.use(cors({ origin: true }));
+
+// Stripe webhook must be raw to verify signature
+app.use('/billing/webhook', express.raw({ type: 'application/json' }), billingRoutes);
+
 app.use(express.json());
 
 app.use('/auth', authRoutes);
 app.use('/chatbots', chatbotsRoutes);
 app.use('/leads', leadsRoutes);
 app.use('/analytics', analyticsRoutes);
+app.use('/billing', billingRoutes);
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
@@ -61,7 +68,7 @@ const saveSources = () => {
 
 
 
-app.post("/upload", authenticateToken, upload.single("file"), async (req, res) => {
+app.post("/upload", authenticateToken, checkPlanLimits, upload.single("file"), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: "No file uploaded" });
@@ -138,7 +145,7 @@ app.post("/upload", authenticateToken, upload.single("file"), async (req, res) =
     }
 });
 
-app.post("/train-website", authenticateToken, async (req, res) => {
+app.post("/train-website", authenticateToken, checkPlanLimits, async (req, res) => {
     try {
         const { url, chatbotId } = req.body;
         if (!url || !chatbotId) {
@@ -245,7 +252,7 @@ app.delete("/sources", (req, res) => {
     res.json({ message: "Knowledge base cleared successfully" });
 });
 
-app.post("/chat", async (req, res) => {
+app.post("/chat", checkPlanLimits, async (req, res) => {
     try {
         const { message, messages, chatbotId } = req.body;
         const userMessage = message || messages;
@@ -292,6 +299,9 @@ app.post("/chat", async (req, res) => {
             "INSERT INTO conversations (chatbot_id, user_message, bot_response) VALUES ($1, $2, $3)",
             [chatbotId, userMessage, reply]
         );
+        
+        // Track the message usage
+        await incrementUsage(req.resolvedOrgId, chatbotId);
 
         res.json({ reply });
     } catch (error) {
