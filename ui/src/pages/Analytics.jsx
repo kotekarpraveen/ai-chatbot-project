@@ -1,159 +1,239 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import { useLocation, Link } from "react-router-dom";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useParams, Link } from "react-router-dom";
+import api from "../api";
+import {
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    AreaChart,
+    Area,
+    BarChart,
+    Bar
+} from "recharts";
 
 export default function Analytics() {
-    const location = useLocation();
-    const queryParams = new URLSearchParams(location.search);
-    const chatbotId = queryParams.get("chatbotId");
-
-    const [data, setData] = useState({
-        totalConversations: 0,
-        totalLeads: 0,
-        topQuestions: [],
-        recentLeads: []
-    });
-    const [loading, setLoading] = useState(false);
-
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const { chatbotId } = useParams();
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [chatbotName, setChatbotName] = useState("");
 
     useEffect(() => {
-        if (chatbotId) {
-            fetchAnalytics();
-        }
+        const fetchData = async () => {
+            try {
+                const [statsRes, botRes, usageRes] = await Promise.all([
+                    api.get(`/analytics/${chatbotId}`),
+                    api.get("/chatbots"),
+                    api.get("/billing/usage")
+                ]);
+                
+                setStats({
+                    ...statsRes.data,
+                    limit: usageRes.data.limit || 1000
+                });
+                const currentBot = botRes.data.find(b => b.id === chatbotId);
+                if (currentBot) setChatbotName(currentBot.name);
+
+            } catch (error) {
+                console.error("Failed to fetch analytics", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
     }, [chatbotId]);
 
-    const fetchAnalytics = async () => {
-        setLoading(true);
-        try {
-            const token = localStorage.getItem("token");
-            const res = await axios.get(`${API_URL}/analytics/${chatbotId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setData({
-                totalConversations: res.data.totalConversations || 0,
-                totalLeads: res.data.totalLeads || 0,
-                topQuestions: res.data.topQuestions || [],
-                recentLeads: res.data.recentLeads || []
-            });
-        } catch (error) {
-            console.error("Failed to fetch analytics");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (!chatbotId) {
+    if (loading) {
         return (
-            <main className="flex-1 flex flex-col h-full bg-white md:rounded-l-[3rem] shadow-2xl items-center justify-center">
-                <h2 className="text-xl font-bold text-gray-500 mb-4">Please select a chatbot to view analytics</h2>
-                <Link to="/chatbots" className="bg-blue-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-blue-700">Go to Chatbots</Link>
-            </main>
+            <div className="flex-1 flex items-center justify-center bg-white md:rounded-l-[3rem]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
         );
     }
 
+    if (!stats) return null;
+
+    const usagePercent = Math.min(Math.round((stats.messagesUsed / stats.limit) * 100), 100);
+
     return (
-        <main className="flex-1 flex flex-col h-full bg-white md:rounded-l-[3rem] shadow-2xl relative overflow-hidden transition-all duration-500">
-            <div className="px-8 py-6 border-b border-gray-50 backdrop-blur-md bg-white/80 sticky top-0 z-10 flex justify-between items-center">
-                <div>
-                    <h2 className="text-xl font-bold text-[#1a2b4b]">Analytics Dashboard</h2>
-                    <p className="text-xs text-gray-500">Monitor chatbot performance and collected leads</p>
+        <main className="flex-1 flex flex-col h-full bg-slate-50 md:rounded-l-[3rem] shadow-2xl relative overflow-hidden transition-all duration-500">
+            {/* Header */}
+            <div className="px-8 py-6 border-b border-gray-100 backdrop-blur-md bg-white/80 sticky top-0 z-10 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                    <Link to="/chatbots" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                    </Link>
+                    <div>
+                        <h2 className="text-xl font-bold text-[#1a2b4b]">{chatbotName} Analytics</h2>
+                        <p className="text-xs text-gray-500 tracking-wide uppercase font-medium">Performance Metrics & Insights</p>
+                    </div>
                 </div>
-                <Link to="/chatbots" className="text-sm font-bold text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-xl transition-all">← Back</Link>
+                <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                    <span className="text-xs font-bold text-gray-500">Real-time Data</span>
+                </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
-                {loading ? (
-                    <div className="flex justify-center items-center h-40">
-                        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                ) : (
-                    <>
-                        {/* Stats Widgets */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-[#f8fbff] p-6 rounded-3xl border border-gray-100 flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Total Conversations</p>
-                                    <h3 className="text-4xl font-extrabold text-[#1a2b4b] mt-2">{data.totalConversations}</h3>
-                                </div>
-                                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="bg-[#f8fbff] p-6 rounded-3xl border border-gray-100 flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Total Leads</p>
-                                    <h3 className="text-4xl font-extrabold text-[#1a2b4b] mt-2">{data.totalLeads}</h3>
-                                </div>
-                                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                    </svg>
-                                </div>
-                            </div>
+            <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <span className="text-2xl">💬</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-500 bg-blue-50 px-3 py-1 rounded-full">Sessions</span>
                         </div>
+                        <h4 className="text-3xl font-black text-[#1a2b4b]">{stats.totalChats}</h4>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-1">Unique Chats</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <span className="text-2xl">⚡</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-purple-500 bg-purple-50 px-3 py-1 rounded-full">Volume</span>
+                        </div>
+                        <h4 className="text-3xl font-black text-[#1a2b4b]">{stats.totalMessages}</h4>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-1">Total Messages</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <span className="text-2xl">👥</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-green-500 bg-green-50 px-3 py-1 rounded-full">Success</span>
+                        </div>
+                        <h4 className="text-3xl font-black text-[#1a2b4b]">{stats.totalLeads}</h4>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-1">Total Leads</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                        <div className="mb-4">
+                           <span className="text-2xl">📊</span>
+                        </div>
+                        <div className="flex justify-between items-end mb-1">
+                            <h4 className="text-3xl font-black text-[#1a2b4b]">{usagePercent}%</h4>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase">{stats.messagesUsed} / {stats.limit}</span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-2">
+                            <div 
+                                className={`h-full transition-all duration-1000 ${usagePercent > 90 ? 'bg-red-500' : 'bg-blue-600'}`}
+                                style={{ width: `${usagePercent}%` }}
+                            ></div>
+                        </div>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-2">Plan Usage</p>
+                    </div>
+                </div>
 
-                        {/* Top Questions Chart */}
-                        <section className="bg-white border-2 border-gray-50 p-8 rounded-[2rem] space-y-6">
-                            <h3 className="text-lg font-bold text-[#1a2b4b]">Top User Questions</h3>
-                            {data.topQuestions.length === 0 ? (
-                                <p className="text-gray-500 text-sm text-center py-10">Not enough data to display top questions.</p>
+                {/* Charts Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col min-h-[400px]">
+                        <div className="mb-8">
+                            <h3 className="text-lg font-bold text-[#1a2b4b]">Daily Conversations</h3>
+                            <p className="text-xs text-gray-400">Activity trend over the last 30 days</p>
+                        </div>
+                        <div className="flex-1 min-h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={stats.dailyTrends}>
+                                    <defs>
+                                        <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>
+                                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis 
+                                        dataKey="day" 
+                                        tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}}
+                                        dy={10}
+                                    />
+                                    <YAxis 
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}}
+                                    />
+                                    <Tooltip 
+                                        contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                                        labelFormatter={(str) => new Date(str).toLocaleDateString()}
+                                    />
+                                    <Area type="monotone" dataKey="count" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#colorCount)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                        <div className="mb-8">
+                            <h3 className="text-lg font-bold text-[#1a2b4b]">Top Questions</h3>
+                            <p className="text-xs text-gray-400">Most frequent queries from your users</p>
+                        </div>
+                        <div className="space-y-4">
+                            {stats.topQuestions.length > 0 ? (
+                                stats.topQuestions.map((q, i) => (
+                                    <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-gray-100">
+                                        <div className="flex items-center gap-4 flex-1 mr-4">
+                                            <span className="w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 rounded-lg text-xs font-black">{i+1}</span>
+                                            <p className="text-sm text-[#1a2b4b] font-medium truncate max-w-[200px] md:max-w-none">{q.user_message}</p>
+                                        </div>
+                                        <span className="text-xs font-bold text-gray-400 whitespace-nowrap">{q.frequency} hits</span>
+                                    </div>
+                                ))
                             ) : (
-                                <div className="h-64">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={data.topQuestions} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                            <XAxis type="number" />
-                                            <YAxis type="category" dataKey="user_message" width={250} tick={{ fontSize: 12 }} />
-                                            <Tooltip cursor={{ fill: '#f8fbff' }} />
-                                            <Bar dataKey="frequency" fill="#2563eb" radius={[0, 4, 4, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                                <div className="h-full flex items-center justify-center py-20 text-gray-400 text-sm italic">
+                                    No questions tracked yet
                                 </div>
                             )}
-                        </section>
+                        </div>
+                    </div>
+                </div>
 
-                        {/* Recent Leads Table */}
-                        <section className="bg-white border-2 border-gray-50 p-8 rounded-[2rem] space-y-6">
+                {/* Recent Leads */}
+                <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex justify-between items-center mb-8">
+                        <div>
                             <h3 className="text-lg font-bold text-[#1a2b4b]">Recent Leads</h3>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left">
-                                    <thead>
-                                        <tr className="text-xs text-gray-400 uppercase tracking-widest border-b border-gray-50">
-                                            <th className="pb-4 font-bold">Name</th>
-                                            <th className="pb-4 font-bold">Email</th>
-                                            <th className="pb-4 font-bold">Phone</th>
-                                            <th className="pb-4 font-bold">Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {data.recentLeads.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="4" className="py-8 text-center text-gray-400 italic text-sm">
-                                                    No leads captured yet.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            data.recentLeads.map((lead, index) => (
-                                                <tr key={index} className="hover:bg-[#f8fbff] transition-colors">
-                                                    <td className="py-4 text-sm font-semibold text-[#1a2b4b]">{lead.name || '-'}</td>
-                                                    <td className="py-4 text-sm text-gray-600">{lead.email || '-'}</td>
-                                                    <td className="py-4 text-sm text-gray-600">{lead.phone || '-'}</td>
-                                                    <td className="py-4 text-xs text-gray-500">
-                                                        {new Date(lead.created_at).toLocaleDateString()}
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </section>
-                    </>
-                )}
+                            <p className="text-xs text-gray-400">Captured through conversation intent</p>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="border-b border-gray-50">
+                                    <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-2">Name</th>
+                                    <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email</th>
+                                    <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone</th>
+                                    <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {stats.recentLeads.map((lead, i) => (
+                                    <tr key={i} className="group hover:bg-slate-50 transition-colors">
+                                        <td className="py-4 pl-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-400">
+                                                    {lead.name?.charAt(0) || "U"}
+                                                </div>
+                                                <span className="text-sm font-bold text-[#1a2b4b]">{lead.name || "Unknown"}</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 text-sm text-gray-500 font-medium">{lead.email}</td>
+                                        <td className="py-4 text-sm text-gray-400">{lead.phone || "-"}</td>
+                                        <td className="py-4 text-xs text-gray-400 font-medium">
+                                            {new Date(lead.created_at).toLocaleDateString()}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {stats.recentLeads.length === 0 && (
+                                    <tr>
+                                        <td colSpan="4" className="py-12 text-center text-gray-400 text-sm italic">No leads captured yet.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </main>
     );

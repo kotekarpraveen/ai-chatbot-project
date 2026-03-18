@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS leads (
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    organization_id UUID REFERENCES organizations(id),
+    organization_id UUID REFERENCES organizations(id) UNIQUE,
     plan TEXT,
     status TEXT,
     stripe_customer_id TEXT,

@@ -1,7 +1,27 @@
 import express from 'express';
 import pool from '../db.js';
 
+import { authenticateToken } from '../middleware/auth.js';
+
 const router = express.Router();
+
+router.get('/', authenticateToken, async (req, res) => {
+    try {
+        const organizationId = req.user.organizationId;
+        const result = await pool.query(
+            `SELECT l.*, c.name as chatbot_name 
+             FROM leads l
+             JOIN chatbots c ON l.chatbot_id = c.id
+             WHERE c.organization_id = $1
+             ORDER BY l.created_at DESC`,
+            [organizationId]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error("Fetch leads error:", error);
+        res.status(500).json({ error: "Failed to fetch leads" });
+    }
+});
 
 router.post('/', async (req, res) => {
     const { chatbotId, name, email, phone, message } = req.body;

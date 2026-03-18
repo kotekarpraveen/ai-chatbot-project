@@ -5,9 +5,16 @@
     const scriptUrl = new URL(script.src);
     const baseUrl = scriptUrl.origin;
 
+    // Session Tracking
+    let sessionId = localStorage.getItem(`yourchatbot_sess_${chatbotId}`);
+    if (!sessionId) {
+        sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem(`yourchatbot_sess_${chatbotId}`, sessionId);
+    }
+
     // Create and style the Iframe
     const iframe = document.createElement("iframe");
-    iframe.src = baseUrl + '?chatbotId=' + chatbotId + '&embedded=true';
+    iframe.src = `${baseUrl}/demo?chatbotId=${chatbotId}&sessionId=${sessionId}&embedded=true`;
     iframe.style.position = "fixed";
     iframe.style.bottom = "90px";
     iframe.style.right = "20px";
@@ -55,8 +62,8 @@
     let isOpen = false;
 
     button.onclick = () => {
-        const chatIcon = document.getElementById("chat-icon");
-        const closeIcon = document.getElementById("close-icon");
+        const chatIcon = button.querySelector("#chat-icon");
+        const closeIcon = button.querySelector("#close-icon");
 
         if (!isOpen) {
             iframe.style.display = "block";
@@ -66,7 +73,8 @@
             }, 10);
             chatIcon.style.display = "none";
             closeIcon.style.display = "block";
-            button.style.transform = "rotate(90deg)";
+            button.style.transform = "rotate(90deg) scale(0.8)";
+            button.style.display = "none"; // COMPLETELY HIDE THE BUBBLE WHEN OPEN
         } else {
             iframe.style.opacity = "0";
             iframe.style.transform = "translateY(20px) scale(0.95)";
@@ -75,7 +83,8 @@
             }, 300);
             chatIcon.style.display = "block";
             closeIcon.style.display = "none";
-            button.style.transform = "rotate(0deg)";
+            button.style.transform = "rotate(0deg) scale(1)";
+            button.style.display = "flex";
         }
         isOpen = !isOpen;
     };

@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { useSearchParams } from "react-router-dom";
 
 export default function Billing() {
     const [subscription, setSubscription] = useState({ plan: "Free", status: "none", current_period_end: null });
     const [usage, setUsage] = useState({ messagesUsed: 0 });
     const [loading, setLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [showSuccess, setShowSuccess] = useState(false);
 
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
     const token = localStorage.getItem("token");
@@ -33,21 +36,37 @@ export default function Billing() {
 
     useEffect(() => {
         fetchBillingData();
+        
+        if (searchParams.get("success") === "true") {
+            setShowSuccess(true);
+            // Clear the param after showing
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete("success");
+            setSearchParams(newParams, { replace: true });
+        }
     }, []);
 
-    const fetchBillingData = async () => {
+    const fetchBillingData = async (retryCount = 0) => {
         setLoading(true);
         try {
             const [subRes, usageRes] = await Promise.all([
                 axios.get(`${API_URL}/billing/subscription`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${API_URL}/billing/usage`, { headers: { Authorization: `Bearer ${token}` } })
             ]);
-            setSubscription(subRes.data);
-            setUsage(usageRes.data);
+            
+            // If we just had a success redirect but the plan is still 'Free', wait and retry once
+            // This handles cases where the webhook takes a second to update the DB
+            if (searchParams.get("success") === "true" && subRes.data.plan === "Free" && retryCount < 2) {
+                console.log("Success detected but plan remains 'Free'. Retrying in 2s...");
+                setTimeout(() => fetchBillingData(retryCount + 1), 2000);
+            } else {
+                setSubscription(subRes.data);
+                setUsage(usageRes.data);
+            }
         } catch (error) {
             console.error("Failed to fetch billing data", error);
         } finally {
-            setLoading(false);
+            if (retryCount === 0) setLoading(false);
         }
     };
 
@@ -85,29 +104,55 @@ export default function Billing() {
                 </div>
             </div>
 
+            {showSuccess && (
+                <div className="mx-8 mt-6 p-6 bg-green-50 border border-green-100 rounded-[2rem] flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-700">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-green-500 p-3 rounded-2xl shadow-lg shadow-green-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 className="text-lg font-bold text-green-800">Subscription Successful!</h4>
+                            <p className="text-sm text-green-600 font-medium">Your <span className="uppercase font-extrabold">{subscription.plan}</span> plan is now active. Welcome aboard!</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setShowSuccess(false)}
+                        className="text-green-400 hover:text-green-600 transition-colors p-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                    </button>
+                </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
                 {/* Current Plan & Usage */}
                 <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="bg-[#f8fbff] p-8 rounded-[2rem] border border-gray-100 flex flex-col justify-between">
+                    <div className={`${subscription.plan !== "Free" ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-xl shadow-blue-100' : 'bg-[#f8fbff] text-[#1a2b4b] border border-gray-100'} p-8 rounded-[2rem] flex flex-col justify-between transition-all duration-500`}>
                         <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Current Plan</p>
-                            <h3 className="text-3xl font-extrabold text-[#1a2b4b] mt-2">{subscription.plan}</h3>
+                            <p className={`text-xs font-bold ${subscription.plan !== "Free" ? 'text-blue-100' : 'text-gray-400'} uppercase tracking-widest`}>Current Plan</p>
+                            <h3 className="text-3xl font-extrabold mt-2 uppercase tracking-tight">{subscription.plan} Plan</h3>
                             {subscription.status === 'active' && (
-                                <p className="text-green-600 text-sm font-bold mt-1 inline-flex items-center gap-1">
-                                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                                    Active
+                                <p className={`text-sm font-bold mt-2 inline-flex items-center gap-1.5 ${subscription.plan !== "Free" ? 'bg-white/20 px-3 py-1 rounded-full' : 'text-green-600'}`}>
+                                    <span className={`w-2 h-2 ${subscription.plan !== "Free" ? 'bg-white' : 'bg-green-500'} rounded-full animate-pulse`}></span>
+                                    Subscription Active
                                 </p>
                             )}
                             {subscription.current_period_end && (
-                                <p className="text-gray-500 text-xs mt-4">
+                                <p className={`${subscription.plan !== "Free" ? 'text-blue-100/70' : 'text-gray-500'} text-xs mt-4`}>
                                     Renewing on: {new Date(subscription.current_period_end).toLocaleDateString()}
                                 </p>
                             )}
                         </div>
                         <div className="mt-8">
-                            <button className="text-sm font-bold text-red-500 hover:text-red-700 transition-colors">
-                                Cancel Subscription
-                            </button>
+                            {subscription.plan !== "Free" && (
+                                <button className="text-sm font-bold text-white/70 hover:text-white transition-colors underline decoration-white/20 underline-offset-4">
+                                    Cancel Subscription
+                                </button>
+                            )}
                         </div>
                     </div>
 

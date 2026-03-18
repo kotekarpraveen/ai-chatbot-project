@@ -37,6 +37,8 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: "Invalid plan or price not configured in .env" });
     }
 
+    console.log(`[DEBUG] Creating session for Plan: ${plan} with PriceID: ${priceId}`);
+
     try {
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -61,57 +63,99 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
 });
 
 // Webhook for Stripe events
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/webhook', async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
+
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+        console.error("[ERROR] Missing STRIPE_WEBHOOK_SECRET in .env");
+        return res.status(500).send("Webhook secret not configured");
+    }
 
     try {
         event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
     } catch (err) {
-        console.error(`Webhook Error: ${err.message}`);
+        console.error(`Webhook Signature Verification Failed: ${err.message}`);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    // Handle the event
+    console.log(`[DEBUG] Received Stripe Event: ${event.type}`);
+
     try {
         switch (event.type) {
             case 'checkout.session.completed': {
                 const session = event.data.object;
+                console.log("[DEBUG] Session Object:", JSON.stringify(session, null, 2));
+
                 const orgId = session.client_reference_id;
                 const subscriptionId = session.subscription;
                 const customerId = session.customer;
-                
-                // Get subscription details
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-                const planId = subscription.items.data[0].price.id;
-                
-                let planName = 'Unknown';
-                if (planId === process.env.STRIPE_PRICE_STARTER) planName = 'Starter';
-                if (planId === process.env.STRIPE_PRICE_PRO) planName = 'Pro';
 
-                const endDate = new Date(subscription.current_period_end * 1000);
-                const startDate = new Date(subscription.current_period_start * 1000);
+                if (!subscriptionId) {
+                    console.error("[ERROR] No subscription found in Checkout Session", session.id);
+                    return res.status(400).send("No subscription in session");
+                }
+                
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+                
+                if (!subscription) {
+                    console.error("[ERROR] Could not retrieve subscription", subscriptionId);
+                    return res.status(404).send("Subscription not found");
+                }
+
+                // In newer Stripe API versions, period dates move into items.data[0]
+                const item = subscription.items?.data?.[0];
+                const rawEnd = subscription.current_period_end || item?.current_period_end;
+                const rawStart = subscription.current_period_start || item?.current_period_start;
+
+                if (!rawEnd || !rawStart) {
+                    console.error("[ERROR] Missing period dates in subscription object", subscriptionId);
+                    console.log("[DEBUG] Full Subscription:", JSON.stringify(subscription, null, 2));
+                    return res.status(400).send("Invalid subscription structure");
+                }
+
+                const priceId = item?.price?.id || subscription.plan?.id;
+                
+                let planName = 'Starter'; 
+                if (priceId === process.env.STRIPE_PRICE_PRO) planName = 'Pro';
+                if (priceId === process.env.STRIPE_PRICE_STARTER) planName = 'Starter';
+
+                const endDate = new Date(parseInt(rawEnd, 10) * 1000).toISOString();
+                const startDate = new Date(parseInt(rawStart, 10) * 1000).toISOString();
+
+                console.log(`[DEBUG] Upserting subscription for Org: ${orgId}, Plan: ${planName}, Period: ${startDate} to ${endDate}`);
 
                 // Upsert subscription
                 await pool.query(
                     `INSERT INTO subscriptions (organization_id, plan, status, stripe_customer_id, stripe_subscription_id, current_period_start, current_period_end) 
                      VALUES ($1, $2, $3, $4, $5, $6, $7)
-                     ON CONFLICT (id) DO UPDATE 
-                     SET plan = EXCLUDED.plan, status = EXCLUDED.status, current_period_end = EXCLUDED.current_period_end`,
+                     ON CONFLICT (organization_id) DO UPDATE 
+                     SET plan = EXCLUDED.plan, 
+                         status = EXCLUDED.status, 
+                         stripe_subscription_id = EXCLUDED.stripe_subscription_id,
+                         current_period_start = EXCLUDED.current_period_start,
+                         current_period_end = EXCLUDED.current_period_end`,
                     [orgId, planName, subscription.status, customerId, subscriptionId, startDate, endDate]
                 );
+                console.log(`[SUCCESS] Plan activated for organization ${orgId}`);
                 break;
             }
             case 'invoice.payment_succeeded': {
                 const invoice = event.data.object;
                 if (invoice.subscription) {
                     const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
-                    const endDate = new Date(subscription.current_period_end * 1000);
                     
-                    await pool.query(
-                        "UPDATE subscriptions SET status = $1, current_period_end = $2 WHERE stripe_subscription_id = $3",
-                        [subscription.status, endDate, invoice.subscription]
-                    );
+                    const item = subscription.items?.data?.[0];
+                    const rawEnd = subscription.current_period_end || item?.current_period_end;
+                    
+                    if (rawEnd) {
+                        const endDate = new Date(parseInt(rawEnd, 10) * 1000).toISOString();
+                        await pool.query(
+                            "UPDATE subscriptions SET status = $1, current_period_end = $2 WHERE stripe_subscription_id = $3",
+                            [subscription.status, endDate, invoice.subscription]
+                        );
+                        console.log(`[SUCCESS] Subscription renewed for ${invoice.subscription}`);
+                    }
                 }
                 break;
             }

@@ -5,17 +5,90 @@ import { checkPlanLimits } from '../middleware/usage.js';
 
 const router = express.Router();
 
-// Get all chatbots for the organization
+// Diagnostic route (Temporary)
+router.get('/debug/db', authenticateToken, async (req, res) => {
+    try {
+        const bots = await pool.query("SELECT id, name, organization_id FROM chatbots");
+        const orgs = await pool.query("SELECT id, name FROM organizations");
+        res.json({
+            userOrgId: req.user.organizationId,
+            chatbots: bots.rows,
+            organizations: orgs.rows
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 router.get('/', authenticateToken, async (req, res) => {
     try {
+        const month = new Date().toISOString().slice(0, 7);
         const result = await pool.query(
-            "SELECT id, name, description, created_at FROM chatbots WHERE organization_id = $1 ORDER BY created_at DESC",
-            [req.user.organizationId]
+            `SELECT c.id, c.name, c.description, c.created_at, 
+             COALESCE(u.messages_used, 0) as messages_used 
+             FROM chatbots c 
+             LEFT JOIN usage_tracking u ON c.id = u.chatbot_id AND u.month = $2
+             WHERE c.organization_id = $1 
+             ORDER BY c.created_at DESC`,
+            [req.user.organizationId, month]
         );
         res.json(result.rows);
     } catch (error) {
         console.error("Get chatbots error:", error);
         res.status(500).json({ error: "Failed to fetch chatbots" });
+    }
+});
+
+// Get a single chatbot's details with current stats
+router.get('/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    console.log(`[DEBUG] Fetching chatbot details. ID: ${id}, OrgID: ${req.user.organizationId}`);
+    try {
+        const month = new Date().toISOString().slice(0, 7);
+        
+        // 1. Fetch bot to check existence and ownership separately
+        const botCheck = await pool.query(
+            "SELECT id, organization_id, name, description, created_at FROM chatbots WHERE id = $1",
+            [id]
+        );
+
+        if (botCheck.rows.length === 0) {
+            console.log(`[DEBUG] No chatbot found with ID: ${id}`);
+            return res.status(404).json({ error: "Chatbot not found" });
+        }
+
+        const bot = botCheck.rows[0];
+        if (bot.organization_id !== req.user.organizationId) {
+            console.warn(`[SECURITY] Org ${req.user.organizationId} tried to access Bot ${id} owned by Org ${bot.organization_id}`);
+            return res.status(403).json({ error: "Unauthorized access to this chatbot" });
+        }
+
+        console.log(`[DEBUG] Bot found and authorized: ${bot.name}`);
+        
+        const usageResult = await pool.query(
+            "SELECT COALESCE(messages_used, 0) as count FROM usage_tracking WHERE chatbot_id = $1 AND month = $2",
+            [id, month]
+        );
+
+        const sourcesCount = await pool.query(
+            "SELECT COUNT(*) FROM knowledge_sources WHERE chatbot_id = $1",
+            [id]
+        );
+
+        const leadsCount = await pool.query(
+            "SELECT COUNT(*) FROM leads WHERE chatbot_id = $1",
+            [id]
+        );
+
+        res.json({
+            ...bot,
+            messagesUsed: usageResult.rows[0]?.count || 0,
+            sourcesCount: parseInt(sourcesCount.rows[0].count, 10),
+            leadsCount: parseInt(leadsCount.rows[0].count, 10)
+        });
+    } catch (error) {
+        console.error("Get chatbot details error:", error);
+        res.status(500).json({ error: "Failed to fetch chatbot details" });
     }
 });
 // Create a new chatbot

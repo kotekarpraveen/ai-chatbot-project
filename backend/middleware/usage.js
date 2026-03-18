@@ -1,24 +1,24 @@
 import pool from '../db.js';
 
 export const checkPlanLimits = async (req, res, next) => {
-    // Determine what action they are taking: create_chatbot, upload_document, chat
-    let action = req.path;
+    // Use full URL path or combined baseUrl + path for accurate matching
+    const fullPath = (req.baseUrl || '') + (req.path === '/' ? '' : req.path);
     let orgId = req.user?.organizationId;
     let chatbotId = req.body?.chatbotId || req.query?.chatbotId;
 
     if (!orgId && chatbotId) {
-        // Unauthenticated chat request, lookup orgId
+        // Unauthenticated chat request (widget), lookup orgId
         const botResult = await pool.query("SELECT organization_id FROM chatbots WHERE id = $1", [chatbotId]);
         if (botResult.rows.length > 0) {
             orgId = botResult.rows[0].organization_id;
-            req.resolvedOrgId = orgId; // Save for usage tracking
+            req.resolvedOrgId = orgId; 
         }
     }
 
     if (!orgId) return res.status(401).json({ error: "Missing organization info" });
 
     try {
-        // Fetch plan
+        // Fetch subscription
         const planResult = await pool.query(
             "SELECT plan, status FROM subscriptions WHERE organization_id = $1 AND status = 'active'",
             [orgId]
@@ -32,10 +32,6 @@ export const checkPlanLimits = async (req, res, next) => {
         let maxMessages = 1000;
         let maxDocs = 5;
 
-        // "Free" is same as Starter if they just signed up, or we can enforce 0
-        // Based on instructions: Starter: chatbots 1, msg 1000, docs 5
-        // Pro: chatbots 5, msg 10000, docs 20
-        // Enterprise: unlimited
         if (plan === 'Pro') {
             maxChatbots = 5;
             maxMessages = 10000;
@@ -46,24 +42,27 @@ export const checkPlanLimits = async (req, res, next) => {
             maxDocs = Infinity;
         }
 
-        // Apply rules
-        if (action === '/chatbots' && req.method === 'POST') {
+        // Feature 6: Chatbot Limits
+        if (fullPath === '/chatbots' && req.method === 'POST') {
             const botCount = await pool.query("SELECT count(*) FROM chatbots WHERE organization_id = $1", [orgId]);
             if (parseInt(botCount.rows[0].count, 10) >= maxChatbots) {
-                return res.status(403).json({ error: "Chatbot limit reached. Please upgrade your plan." });
+                return res.status(403).json({ error: "Upgrade your plan to create more chatbots" });
             }
         }
 
-        if (action === '/upload' || action === '/train-website') {
+        // Limit for document training
+        if (fullPath === '/upload' || fullPath === '/train-website') {
             if(chatbotId) {
+                // Documents count per chatbot
                 const docCount = await pool.query("SELECT count(*) FROM knowledge_sources WHERE chatbot_id = $1", [chatbotId]);
                 if (parseInt(docCount.rows[0].count, 10) >= maxDocs) {
-                    return res.status(403).json({ error: "Document limit reached for this chatbot. Please upgrade your plan." });
+                    return res.status(403).json({ error: "Document limit reached. Please upgrade your plan." });
                 }
             }
         }
 
-        if (action === '/chat') {
+        // Feature 1: Usage Limit Enforcement (Messages)
+        if (fullPath === '/chat') {
             const month = new Date().toISOString().slice(0, 7);
             const usageResult = await pool.query(
                 "SELECT SUM(messages_used) as total_messages FROM usage_tracking WHERE organization_id = $1 AND month = $2",
@@ -71,7 +70,7 @@ export const checkPlanLimits = async (req, res, next) => {
             );
             const used = usageResult.rows[0].total_messages ? parseInt(usageResult.rows[0].total_messages, 10) : 0;
             if (used >= maxMessages) {
-                return res.status(403).json({ error: "You have reached your monthly chat limit. Please upgrade your plan." });
+                return res.status(403).json({ error: "You have reached your monthly limit. Please upgrade your plan." });
             }
         }
 

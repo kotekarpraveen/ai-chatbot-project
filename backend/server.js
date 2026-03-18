@@ -10,12 +10,15 @@ import { PDFParse } from "pdf-parse";
 import path from "path";
 import { scrapeWebsite } from "./websiteCrawler.js";
 import { v4 as uuidv4 } from "uuid";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 import authRoutes from './routes/auth.js';
 import chatbotsRoutes from './routes/chatbots.js';
 import leadsRoutes from './routes/leads.js';
 import analyticsRoutes from './routes/analytics.js';
 import billingRoutes from './routes/billing.js';
+import './cron.js';
 import { authenticateToken } from './middleware/auth.js';
 import { checkPlanLimits, incrementUsage } from './middleware/usage.js';
 import pool from './db.js';
@@ -24,13 +27,41 @@ dotenv.config();
 
 const upload = multer({ dest: "uploads/" });
 const app = express();
+
+// Global Logger
+app.use((req, res, next) => {
+    console.log(`[REQUEST] ${req.method} ${req.url}`);
+    next();
+});
+
+// Feature 12: Security - Secure Headers
+app.use(helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: false, 
+}));
+
+// Feature 12: Security - Rate Limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 100, 
+    message: { error: "Too many requests, please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use("/chat", limiter);
+app.use("/auth", limiter);
+
+console.log("[STARTUP] Initializing production-ready SaaS backend...");
+
 app.use(cors({ origin: true }));
 
 // Stripe webhook must be raw to verify signature
-app.use('/billing/webhook', express.raw({ type: 'application/json' }), billingRoutes);
+// Special case: Stripe webhook must receive RAW body for signature verification
+app.use('/billing/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 
+// Main routes
 app.use('/auth', authRoutes);
 app.use('/chatbots', chatbotsRoutes);
 app.use('/leads', leadsRoutes);
@@ -252,13 +283,23 @@ app.delete("/sources", (req, res) => {
     res.json({ message: "Knowledge base cleared successfully" });
 });
 
+const responseCache = new Map();
+
 app.post("/chat", checkPlanLimits, async (req, res) => {
     try {
-        const { message, messages, chatbotId } = req.body;
-        const userMessage = message || messages;
+        const { message, messages, chatbotId, sessionId: reqSessionId } = req.body;
+        const userMessage = (message || messages)?.toString();
+        const sessionId = reqSessionId || "demo-session";
 
         if (!chatbotId) {
             return res.status(400).json({ error: "chatbotId is required" });
+        }
+
+        // Feature 13: Caching
+        const cacheKey = `${chatbotId}:${userMessage}`;
+        if (responseCache.has(cacheKey)) {
+            console.log("[DEBUG] Cache hit for message:", userMessage);
+            return res.json({ reply: responseCache.get(cacheKey), cached: true, sessionId });
         }
 
         const checkBot = await pool.query("SELECT id FROM chatbots WHERE id = $1", [chatbotId]);
@@ -266,11 +307,8 @@ app.post("/chat", checkPlanLimits, async (req, res) => {
             return res.status(404).json({ error: "Chatbot not found" });
         }
 
-        console.log("Incoming message for chatbot", chatbotId, ":", userMessage);
-
-        if (!userMessage || typeof userMessage !== "string") {
-            return res.status(400).json({ error: "Message is required and must be a string." });
-        }
+        // Feature 11: Logging
+        console.log(`[CHAT_LOG] Chatbot: ${chatbotId} | Session: ${sessionId} | User: ${userMessage.slice(0, 50)}...`);
 
         let context = "";
         if (vectorStore.memoryVectors && vectorStore.memoryVectors.length > 0) {
@@ -278,12 +316,18 @@ app.post("/chat", checkPlanLimits, async (req, res) => {
             context = docs.map(d => d.pageContent).join("\n");
         }
 
+        // Feature 3: Lead Intent Detection
+        const leadKeywords = ['pricing', 'cost', 'demo', 'contact', 'buy', 'enquiry'];
+        const hasLeadIntent = leadKeywords.some(kw => userMessage.toLowerCase().includes(kw));
+
         const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
                 {
                     role: "system",
-                    content: "Answer using the provided context. If no context answers the question, do your best."
+                    content: `You are a helpful AI assistant. Answer using the provided context. 
+                    If no context answers the question, do your best.
+                    ${hasLeadIntent ? 'IMPORTANT: The user is interested in sales/pricing. After answering, POLITELY ask for their name and email so our team can contact them.' : ''}`
                 },
                 {
                     role: "user",
@@ -294,20 +338,36 @@ app.post("/chat", checkPlanLimits, async (req, res) => {
 
         const reply = completion.choices[0].message.content;
 
-        // Log the conversation
+        // Log the conversation with auto-healing migration
+        await pool.query("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS session_id TEXT");
         await pool.query(
-            "INSERT INTO conversations (chatbot_id, user_message, bot_response) VALUES ($1, $2, $3)",
-            [chatbotId, userMessage, reply]
+            "INSERT INTO conversations (chatbot_id, user_message, bot_response, session_id) VALUES ($1, $2, $3, $4)",
+            [chatbotId, userMessage, reply, sessionId]
         );
         
         // Track the message usage
         await incrementUsage(req.resolvedOrgId, chatbotId);
 
-        res.json({ reply });
+        // Store in cache
+        responseCache.set(cacheKey, reply);
+        
+        res.json({ reply, triggerLeadForm: hasLeadIntent, sessionId });
     } catch (error) {
-        console.error("Chat error:", error);
-        res.status(500).json({ error: "Something went wrong. Please check the backend logs." });
+        console.error("[ERROR] Chat implementation:", error);
+        res.status(500).json({ error: "AI service is temporarily unavailable. Please try again." });
     }
+});
+
+// Feature 10: Centralized Error Handling
+app.use((err, req, res, next) => {
+    console.error(`[UNHANDLED_ERROR] ${err.name}: ${err.message}`);
+    console.error(err.stack);
+    
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({
+        error: "Internal Server Error",
+        message: process.env.NODE_ENV === 'production' ? "Something went wrong on our end." : err.message
+    });
 });
 
 const PORT = process.env.PORT || 5000;

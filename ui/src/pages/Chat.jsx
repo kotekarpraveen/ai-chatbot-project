@@ -14,6 +14,19 @@ function Chat({ setShowInfo }) {
     const [loading, setLoading] = useState(false);
     const [chatbots, setChatbots] = useState([]);
     const [leadCaptured, setLeadCaptured] = useState(false);
+    
+    // Persistent Session ID
+    const [sessionId, setSessionId] = useState(() => {
+        const urlSession = queryParams.get("sessionId");
+        if (urlSession) return urlSession;
+        
+        const localSession = localStorage.getItem(`chat_session_${chatbotId}`);
+        if (localSession) return localSession;
+        
+        const newSession = "sess_" + Math.random().toString(36).substring(2, 15);
+        if (chatbotId) localStorage.setItem(`chat_session_${chatbotId}`, newSession);
+        return newSession;
+    });
 
     // For lead capture
     const [name, setName] = useState("");
@@ -64,11 +77,17 @@ function Chat({ setShowInfo }) {
         }
     };
 
+    const greeting = { 
+        role: "assistant", 
+        content: "Hi 👋 How can I help you today? I can answer questions about our services, pricing, or help you get started." 
+    };
+
     const sendMessage = async () => {
         if (!message.trim() || !chatbotId) return;
 
         const userMessage = { role: "user", content: message };
-        setChat((prev) => [...prev, userMessage]);
+        // If chat is empty except for possible greeting, initialize it
+        setChat((prev) => prev.length === 0 ? [greeting, userMessage] : [...prev, userMessage]);
         setMessage("");
         setLoading(true);
 
@@ -76,25 +95,26 @@ function Chat({ setShowInfo }) {
             const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
             const res = await axios.post(`${API_URL}/chat`, {
                 message: message,
-                chatbotId: chatbotId
+                chatbotId: chatbotId,
+                sessionId: sessionId
             });
 
             const botMessage = { role: "assistant", content: res.data.reply };
             setChat((prev) => [...prev, botMessage]);
 
-            // Randomly trigger lead capture after 3 messages if not captured yet
-            if (chat.length >= 2 && !leadCaptured) {
+            // Feature 3: Smart Lead Form Triggering
+            if (res.data.triggerLeadForm && !leadCaptured) {
                 const promptLead = {
                     role: "assistant",
-                    content: "Would you like our human team to follow up with you?",
+                    content: "Would you like our team to follow up with you? Please leave your details below.",
                     isLeadForm: true
                 };
                 setChat((prev) => [...prev, promptLead]);
             }
         } catch (error) {
             console.error(error);
-            const errorMsg = error.response?.data?.error || "Error: Could not connect to the server.";
-            const errorMessage = { role: "assistant", content: errorMsg };
+            const errorMsg = error.response?.data?.error || "Our brain is a bit tired. Please try again in a moment.";
+            const errorMessage = { role: "assistant", content: `⚠️ ${errorMsg}` };
             setChat((prev) => [...prev, errorMessage]);
         }
 
@@ -156,15 +176,11 @@ function Chat({ setShowInfo }) {
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth custom-scrollbar">
                 {chat.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-6 opacity-80">
-                        <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-[2rem] flex items-center justify-center shadow-inner">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-bold text-[#1a2b4b]">Hello!</h3>
-                            <p className="text-sm text-gray-500 mt-2">I'm a virtual assistant. How can I help you today?</p>
+                    <div className="flex justify-start animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="max-w-[85%] md:max-w-[75%] px-6 py-4 rounded-[2rem] rounded-tl-none bg-[#f8fbff] text-[#1a2b4b] border border-gray-100 shadow-sm">
+                            <div className="text-sm leading-relaxed prose prose-slate prose-sm max-w-none">
+                                <ReactMarkdown>{greeting.content}</ReactMarkdown>
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -211,29 +227,26 @@ function Chat({ setShowInfo }) {
                 <div ref={chatEndRef}></div>
             </div>
 
-            {/* Input Area */}
-            <div className="px-5 pb-5 pt-3 bg-white flex-shrink-0 border-t border-gray-50">
-                <div className="relative flex items-center">
+            <div className="px-4 pb-6 pt-2 bg-white flex-shrink-0 border-t border-gray-100">
+                <div className="flex items-center gap-2 max-w-4xl mx-auto">
                     <input
-                        className="w-full bg-[#f8fbff] border-2 border-transparent focus:border-blue-100 focus:bg-white rounded-[1.5rem] py-4 px-6 pr-20 outline-none transition-all placeholder:text-gray-400 text-[#1a2b4b]"
+                        className="flex-1 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:bg-white rounded-[1.25rem] py-3.5 px-6 outline-none transition-all placeholder:text-gray-400 text-slate-900 shadow-sm"
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                        placeholder="Type your message..."
+                        placeholder="Type your message here..."
                     />
                     <button
                         onClick={sendMessage}
                         disabled={loading || !message.trim()}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:shadow-none text-white w-12 h-12 rounded-[1rem] transition-all shadow-md shadow-blue-200 active:scale-95 flex items-center justify-center"
+                        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-8 py-3.5 rounded-[1.25rem] font-bold text-sm transition-all shadow-lg shadow-blue-200 active:scale-95 flex items-center justify-center whitespace-nowrap min-w-[100px]"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
+                        <span>Send Message</span>
                     </button>
                 </div>
                 {!isEmbedded && (
-                    <p className="text-[10px] text-gray-400 text-center mt-3 uppercase tracking-[0.2em] font-bold opacity-30">
-                        SaaS Platform MVP Backend
+                    <p className="text-[10px] text-gray-400 text-center mt-3 uppercase tracking-widest font-bold opacity-30">
+                        Powered by YourAIChatbot
                     </p>
                 )}
             </div>

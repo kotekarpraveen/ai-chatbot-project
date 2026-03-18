@@ -231,8 +231,18 @@ const AdminDashboard = () => {
                             <tbody className="divide-y divide-gray-50">
                                 {sources.length === 0 ? (
                                     <tr>
-                                        <td colSpan="4" className="py-12 text-center text-gray-400 italic text-sm">
-                                            No knowledge sources indexed yet.
+                                        <td colSpan="4" className="py-20 text-center">
+                                            <div className="flex flex-col items-center justify-center space-y-4">
+                                                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl animate-pulse">
+                                                    📚
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-xl font-bold text-[#1a2b4b]">No knowledge sources yet</h3>
+                                                    <p className="text-gray-400 text-sm max-w-xs mx-auto mt-1">
+                                                        Upload a PDF or crawl a website to give your AI assistant some data to learn from.
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </td>
                                     </tr>
                                 ) : (

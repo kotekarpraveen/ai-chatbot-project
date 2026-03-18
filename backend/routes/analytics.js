@@ -18,12 +18,19 @@ router.get('/:chatbotId', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: "Unauthorized access to chatbot analytics" });
         }
 
-        // Get total conversations
-        const convResult = await pool.query(
+        // Get total unique chats (sessions)
+        const chatResult = await pool.query(
+            "SELECT COUNT(DISTINCT session_id) FROM conversations WHERE chatbot_id = $1",
+            [chatbotId]
+        );
+        const totalChats = parseInt(chatResult.rows[0].count, 10);
+        
+        // Get total messages (all interactions)
+        const interactionsResult = await pool.query(
             "SELECT COUNT(*) FROM conversations WHERE chatbot_id = $1",
             [chatbotId]
         );
-        const totalConversations = parseInt(convResult.rows[0].count, 10);
+        const totalMessages = parseInt(interactionsResult.rows[0].count, 10);
 
         // Get total leads
         const leadsResult = await pool.query(
@@ -50,11 +57,33 @@ router.get('/:chatbotId', authenticateToken, async (req, res) => {
             [chatbotId]
         );
 
+        // Get daily chats trend
+        const dailyTrendsResult = await pool.query(
+            `SELECT DATE(created_at) as day, COUNT(*) as count 
+             FROM conversations 
+             WHERE chatbot_id = $1 
+             AND created_at > NOW() - INTERVAL '30 days'
+             GROUP BY DATE(created_at) 
+             ORDER BY day ASC`,
+            [chatbotId]
+        );
+
+        // Get messages used for this specific chatbot this month
+        const month = new Date().toISOString().slice(0, 7);
+        const chatbotUsageResult = await pool.query(
+            "SELECT messages_used FROM usage_tracking WHERE chatbot_id = $1 AND month = $2",
+            [chatbotId, month]
+        );
+        const messagesUsed = chatbotUsageResult.rows.length > 0 ? parseInt(chatbotUsageResult.rows[0].messages_used, 10) : 0;
+
         res.json({
-            totalConversations,
+            totalChats,
+            totalMessages,
             totalLeads,
+            messagesUsed,
             topQuestions,
-            recentLeads: recentLeadsResult.rows
+            recentLeads: recentLeadsResult.rows,
+            dailyTrends: dailyTrendsResult.rows
         });
     } catch (error) {
         console.error("Analytics fetch error:", error);
