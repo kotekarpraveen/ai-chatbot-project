@@ -4,7 +4,14 @@ import pool from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+// Initialize Stripe gracefully - don't crash the server if key is missing
+let stripe;
+if (process.env.STRIPE_SECRET_KEY) {
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+} else {
+    console.warn("[WARNING] STRIPE_SECRET_KEY is missing. Billing features will be disabled.");
+}
 
 // Get current subscription
 router.get('/subscription', authenticateToken, async (req, res) => {
@@ -27,6 +34,7 @@ router.get('/subscription', authenticateToken, async (req, res) => {
 
 // Create checkout session
 router.post('/create-checkout-session', authenticateToken, async (req, res) => {
+    if (!stripe) return res.status(503).json({ error: "Billing service is not configured (Missing ID)." });
     const { plan } = req.body;
     
     let priceId;
@@ -64,6 +72,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
 
 // Webhook for Stripe events
 router.post('/webhook', async (req, res) => {
+    if (!stripe) return res.status(503).send("Webhook ignored: Service unconfigured.");
     const sig = req.headers['stripe-signature'];
     let event;
 
