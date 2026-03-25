@@ -23,6 +23,13 @@ import { authenticateToken } from './middleware/auth.js';
 import { checkPlanLimits, incrementUsage } from './middleware/usage.js';
 import pool from './db.js';
 
+// Feature 10: Early DB connection check
+pool.query('SELECT 1').then(() => {
+    console.log('[STARTUP] Database connection verified successfully.');
+}).catch(err => {
+    console.error('[CRITICAL] Database connection failed:', err.message);
+});
+
 dotenv.config();
 
 const upload = multer({ dest: "uploads/" });
@@ -60,6 +67,15 @@ app.use(cors({ origin: true }));
 app.use('/billing/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
+
+// Health check & Root routes for Render
+app.get("/", (req, res) => {
+    res.json({ status: "healthy", message: "AI Chatbot Backend API is active." });
+});
+
+app.get("/health", (req, res) => {
+    res.status(200).send("OK");
+});
 
 // Main routes
 app.use('/auth', authRoutes);
