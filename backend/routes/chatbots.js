@@ -39,32 +39,53 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 });
 
-// Get a single chatbot's details with current stats
-router.get('/:id', authenticateToken, async (req, res) => {
+// Get a single chatbot's details (Publicly accessible for Demo Player)
+router.get('/:id', async (req, res) => {
     const { id } = req.params;
-    console.log(`[DEBUG] Fetching chatbot details. ID: ${id}, OrgID: ${req.user.organizationId}`);
+    console.log(`[DEBUG] Publicly fetching chatbot details. ID: ${id}`);
     try {
         const month = new Date().toISOString().slice(0, 7);
         
-        // 1. Fetch bot to check existence and ownership separately
-        const botCheck = await pool.query(
+        // Fetch bot basic info
+        const result = await pool.query(
             "SELECT id, organization_id, name, description, created_at FROM chatbots WHERE id = $1",
             [id]
         );
 
-        if (botCheck.rows.length === 0) {
-            console.log(`[DEBUG] No chatbot found with ID: ${id}`);
+        if (result.rows.length === 0) {
             return res.status(404).json({ error: "Chatbot not found" });
         }
 
-        const bot = botCheck.rows[0];
-        if (bot.organization_id !== req.user.organizationId) {
-            console.warn(`[SECURITY] Org ${req.user.organizationId} tried to access Bot ${id} owned by Org ${bot.organization_id}`);
-            return res.status(403).json({ error: "Unauthorized access to this chatbot" });
+        const bot = result.rows[0];
+        
+        // Attempt to authenticate optionally to see if we can provide more info
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+        let isOwner = false;
+
+        if (token) {
+            try {
+                const jwt = (await import('jsonwebtoken')).default;
+                const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_secret_key");
+                if (decoded && decoded.organizationId === bot.organization_id) {
+                    isOwner = true;
+                }
+            } catch (e) {
+                // Ignore decoding error, just treat as non-owner
+            }
         }
 
-        console.log(`[DEBUG] Bot found and authorized: ${bot.name}`);
-        
+        // Return full info for owner, limited for public
+        if (!isOwner) {
+            return res.json({
+                id: bot.id,
+                name: bot.name,
+                description: bot.description,
+                created_at: bot.created_at
+            });
+        }
+
+        // Full Info for Owner
         const usageResult = await pool.query(
             "SELECT COALESCE(messages_used, 0) as count FROM usage_tracking WHERE chatbot_id = $1 AND month = $2",
             [id, month]

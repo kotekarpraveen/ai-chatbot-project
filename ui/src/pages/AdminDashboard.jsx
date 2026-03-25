@@ -8,6 +8,8 @@ const AdminDashboard = () => {
     const chatbotId = queryParams.get("chatbotId");
 
     const [sources, setSources] = useState([]);
+    const [chatbots, setChatbots] = useState([]);
+    const [loadingChatbots, setLoadingChatbots] = useState(false);
     const [url, setUrl] = useState("");
     const [uploadLoading, setUploadLoading] = useState(false);
     const [trainLoading, setTrainLoading] = useState(false);
@@ -18,8 +20,24 @@ const AdminDashboard = () => {
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
     useEffect(() => {
-        if (chatbotId) fetchSources();
+        if (chatbotId) {
+            fetchSources();
+        } else {
+            fetchChatbots();
+        }
     }, [chatbotId]);
+
+    const fetchChatbots = async () => {
+        setLoadingChatbots(true);
+        try {
+            const res = await axios.get(`${API_URL}/chatbots`, getAuthHeaders());
+            setChatbots(res.data);
+        } catch (error) {
+            console.error("Error fetching chatbots:", error);
+        } finally {
+            setLoadingChatbots(false);
+        }
+    };
 
     const getAuthHeaders = () => ({
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
@@ -106,9 +124,48 @@ const AdminDashboard = () => {
 
     if (!chatbotId) {
         return (
-            <main className="flex-1 flex flex-col h-full bg-white md:rounded-l-[3rem] shadow-2xl items-center justify-center">
-                <h2 className="text-xl font-bold text-gray-500 mb-4">Please select a chatbot to manage</h2>
-                <Link to="/chatbots" className="bg-blue-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-blue-700">Go to Chatbots</Link>
+            <main className="flex-1 flex flex-col h-full bg-[#f8fbff] md:rounded-l-[3rem] shadow-2xl items-center justify-center p-8 text-center space-y-8 animate-in fade-in duration-700 overflow-y-auto">
+                <div className="relative">
+                    <div className="absolute inset-0 bg-blue-400 blur-3xl opacity-20 rounded-full animate-pulse"></div>
+                    <div className="relative w-24 h-24 bg-white text-blue-600 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-xl text-3xl">
+                        📚
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <h2 className="text-3xl font-black text-[#1a2b4b] tracking-tight">Knowledge Manager</h2>
+                    <p className="text-slate-500 max-w-sm mx-auto font-medium">Select a chatbot assistant to manage its training data and knowledge base.</p>
+                </div>
+
+                <div className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+                    {chatbots.length > 0 ? (
+                        chatbots.map(bot => (
+                            <Link 
+                                key={bot.id} 
+                                to={`/admin?chatbotId=${bot.id}`} 
+                                className="group bg-white border border-slate-100 p-6 rounded-[2.5rem] text-left hover:border-blue-400 hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 flex flex-col justify-between h-48"
+                            >
+                                <div>
+                                    <h3 className="font-bold text-[#1a2b4b] group-hover:text-blue-600 transition-colors uppercase tracking-tight mb-2 truncate">{bot.name}</h3>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-slate-50 inline-block px-2 py-1 rounded-md">ID: {bot.id.substring(0, 8)}...</p>
+                                </div>
+                                <div className="mt-4 flex items-center gap-2 text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform">
+                                    Manage Knowledge Base →
+                                </div>
+                            </Link>
+                        ))
+                    ) : (
+                        <div className="col-span-full">
+                            {loadingChatbots ? (
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                            ) : (
+                                <Link to="/chatbots" className="inline-flex items-center gap-2 bg-slate-900 text-white font-bold py-4 px-10 rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95">
+                                    <span>Create Your First Agent</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                                </Link>
+                            )}
+                        </div>
+                    )}
+                </div>
             </main>
         );
     }

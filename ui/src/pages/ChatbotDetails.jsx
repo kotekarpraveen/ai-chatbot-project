@@ -23,7 +23,7 @@ export default function ChatbotDetails() {
         fetchDetails();
     }, [id]);
 
-    const widgetCode = `<script src="https://chatbot.apzelio.com/widget.js" data-chatbot="${id}"></script>`;
+    const widgetCode = `<script src="${window.location.origin}/widget.js" data-chatbot="${id}"></script>`;
 
     const handleCopy = () => {
         navigator.clipboard.writeText(widgetCode);
@@ -117,7 +117,7 @@ export default function ChatbotDetails() {
                         <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-50">
                             <h4 className="text-sm font-bold text-blue-600 mb-2">Development Demo</h4>
                             <p className="text-xs text-gray-500 leading-relaxed mb-4">Test your chatbot in a sandbox environment before going live on your site.</p>
-                            <Link to={`/?chatbotId=${bot.id}`} className="text-xs font-bold text-blue-600 hover:underline">Launch Demo Player →</Link>
+                            <Link to={`/demo?chatbotId=${bot.id}`} className="text-xs font-bold text-blue-600 hover:underline">Launch Demo Player →</Link>
                         </div>
                         <div className="bg-purple-50/50 p-6 rounded-3xl border border-purple-50">
                             <h4 className="text-sm font-bold text-purple-600 mb-2">Usage Summary</h4>

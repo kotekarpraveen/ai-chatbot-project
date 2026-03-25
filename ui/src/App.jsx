@@ -11,6 +11,7 @@ import Signup from "./pages/Signup";
 import Analytics from "./pages/Analytics";
 import Leads from "./pages/Leads";
 import Billing from "./pages/Billing";
+import Settings from "./pages/Settings";
 import Sidebar from "./components/Sidebar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { clsx } from "clsx";
@@ -26,13 +27,14 @@ const AppLayout = () => {
 
   const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
   const isLandingPage = location.pathname === "/";
+  const isEmbedded = new URLSearchParams(location.search).get("embedded") === "true";
 
   return (
     <div className={cn(
         "bg-[#f8fbff] flex flex-row font-sans",
         isLandingPage ? "min-h-screen" : "h-screen overflow-hidden"
     )}>
-      {!isAuthPage && !isLandingPage && <Sidebar showInfo={showInfo} setShowInfo={setShowInfo} />}
+      {!isAuthPage && !isLandingPage && !isEmbedded && <Sidebar showInfo={showInfo} setShowInfo={setShowInfo} />}
 
       <Routes>
         <Route path="/" element={<LandingPage />} />
@@ -48,6 +50,7 @@ const AppLayout = () => {
           <Route path="/analytics/:chatbotId" element={<Analytics />} />
           <Route path="/leads" element={<Leads />} />
           <Route path="/billing" element={<Billing />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>
     </div>

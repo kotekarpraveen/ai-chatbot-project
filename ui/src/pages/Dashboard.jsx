@@ -108,7 +108,7 @@ export default function Dashboard() {
                             <Link to="/admin" className="text-sm font-bold bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-black transition-colors">
                                 Manage Knowledge
                             </Link>
-                            <Link to="/" className="text-sm font-bold bg-white border-2 border-slate-100 text-slate-600 px-6 py-3 rounded-xl hover:bg-slate-50 transition-colors">
+                            <Link to="/demo" className="text-sm font-bold bg-white border-2 border-slate-100 text-slate-600 px-6 py-3 rounded-xl hover:bg-slate-50 transition-colors">
                                 Demo Player
                             </Link>
                         </div>

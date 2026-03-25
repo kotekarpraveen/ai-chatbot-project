@@ -220,9 +220,12 @@ export default function LandingPage() {
                             <Link to="/signup" className="group bg-slate-900 text-white px-10 py-5 rounded-[1.5rem] font-black hover:bg-black transition-all shadow-2xl shadow-gray-300 flex items-center gap-2">
                                 Start Free <ChevronRight className="group-hover:translate-x-1 transition-transform" />
                             </Link>
-                            <a href="#demo" className="bg-white border-2 border-gray-100 px-10 py-5 rounded-[1.5rem] font-black hover:bg-gray-50 transition-all flex items-center gap-2">
+                            <button 
+                                onClick={() => document.getElementById('demo').scrollIntoView({ behavior: 'smooth' })}
+                                className="bg-white border-2 border-gray-100 px-10 py-5 rounded-[1.5rem] font-black hover:bg-gray-50 transition-all flex items-center gap-2"
+                            >
                                 View Demo <Play size={16} fill="currentColor" />
-                            </a>
+                            </button>
                         </div>
                         
                         <div className="flex items-center gap-6 pt-8 border-t border-gray-100">
@@ -310,34 +313,106 @@ export default function LandingPage() {
             </section>
 
             {/* --- LIVE DEMO SECTION --- */}
-            <section id="demo" className="py-20 md:py-32 px-4 md:px-6">
-                <div className="max-w-7xl mx-auto bg-slate-900 rounded-[3rem] md:rounded-[4rem] p-8 md:p-24 overflow-hidden relative shadow-3xl shadow-blue-100">
-                    <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/20 blur-[100px] -mr-48 -mt-48"></div>
-                    <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-600/10 blur-[100px] -ml-48 -mb-48"></div>
+            {/* --- REDESIGNED LIVE DEMO SECTION --- */}
+            <section id="demo" className="py-24 md:py-40 px-6 relative overflow-hidden">
+                {/* Background Blobs */}
+                <div className="absolute top-1/4 -left-20 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] animate-pulse"></div>
+                <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }}></div>
 
-                    <div className="grid lg:grid-cols-2 gap-12 md:gap-20 items-center relative z-10">
-                        <div className="space-y-6 md:space-y-8 text-center md:text-left">
-                            <h3 className="text-3xl md:text-5xl font-black text-white leading-tight">Try the AI chatbot <br /> right now.</h3>
-                            <p className="text-slate-400 text-base md:text-lg leading-relaxed max-w-xl mx-auto md:mx-0">
-                                See how YourAIChatbot handles inquiries, detect intent, and captures lead data 
-                                with human-level understanding and machine-level speed.
-                            </p>
-                            <div className="space-y-3">
-                                <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Try these questions:</p>
-                                {["What services do you offer?", "How can I contact you?", "Show me your pricing"].map(q => (
-                                    <button key={q} className="block w-full text-left p-3 md:p-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm hover:bg-white/10 transition-all font-medium">
-                                        "{q}"
-                                    </button>
-                                ))}
+                <div className="max-w-7xl mx-auto relative">
+                    <div className="bg-slate-900 rounded-[4rem] p-10 md:p-24 overflow-hidden relative shadow-3xl shadow-blue-900/40 border border-white/5">
+                        {/* Internal Decorative Elements */}
+                        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-blue-600/20 to-transparent blur-[100px] -mr-48 -mt-48 pointer-events-none"></div>
+                        
+                        <div className="grid lg:grid-cols-2 gap-20 items-center relative z-10">
+                            <div className="space-y-10">
+                                <div className="space-y-4">
+                                    <div className="inline-flex items-center gap-2 bg-blue-500/10 text-blue-400 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-500/20">
+                                        <span className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></span>
+                                        Live Experience
+                                    </div>
+                                    <h3 className="text-4xl md:text-7xl font-black text-white leading-[1.1] tracking-tight">
+                                        Experience the <br />
+                                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Future of Support.</span>
+                                    </h3>
+                                    <p className="text-slate-400 text-lg md:text-xl leading-relaxed max-w-lg font-medium">
+                                        Our AI doesn't just chat; it understands your business. Interaction leads to 
+                                        trust, and trust leads to conversion. See it in action.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-px bg-blue-500/30 flex-1"></div>
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Interactive Scenarios</span>
+                                        <div className="h-px bg-blue-500/30 flex-1"></div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {[
+                                            { q: "What services do you offer?", icon: "💼" },
+                                            { q: "How can I contact you?", icon: "📩" },
+                                            { q: "Show me your pricing", icon: "💰" },
+                                            { q: "Tell me about AI training", icon: "🧠" }
+                                        ].map(item => (
+                                            <button 
+                                                key={item.q} 
+                                                className="group text-left p-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm hover:bg-white/10 hover:border-blue-500/50 transition-all font-semibold flex items-center gap-4 hover:-translate-y-1"
+                                            >
+                                                <span className="text-xl group-hover:scale-125 transition-transform">{item.icon}</span>
+                                                <span className="opacity-80 group-hover:opacity-100 italic">"{item.q}"</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                
+                                <div className="pt-4">
+                                    <Link to="/signup" className="text-blue-400 font-bold text-sm hover:underline flex items-center gap-2 group">
+                                        Ready to create your own? Get started for free 
+                                        <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+                                    </Link>
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="bg-white rounded-[2rem] md:rounded-[3rem] p-2 md:p-6 shadow-2xl h-[450px] md:h-[550px]">
-                            <iframe 
-                                src="/demo" 
-                                className="w-full h-full rounded-[1.5rem] md:rounded-2xl border-0"
-                                title="Chatbot Demo"
-                            ></iframe>
+                            <div className="relative group/mockup">
+                                {/* Floating Glow */}
+                                <div className="absolute inset-0 bg-blue-500/20 blur-[100px] items-center justify-center flex opacity-0 group-hover/mockup:opacity-100 transition-opacity duration-1000"></div>
+                                
+                                {/* Device Mockup Layout */}
+                                <div className="relative bg-[#0b1426] rounded-[3.5rem] p-3 shadow-[0_0_80px_rgba(37,99,235,0.2)] border border-white/10 transform transition-all duration-700 hover:scale-[1.02]">
+                                    <div className="bg-white rounded-[2.8rem] overflow-hidden shadow-inner h-[550px] md:h-[650px] relative">
+                                        <iframe 
+                                            src="/demo?chatbotId=d0809080-acca-4314-bb6b-b659d8374937&embedded=true" 
+                                            className="w-full h-full border-0 relative z-10"
+                                            title="Chatbot Demo"
+                                        ></iframe>
+                                    </div>
+                                    
+                                    {/* Mockup Decorations */}
+                                    <div className="absolute top-1/2 -right-4 w-1.5 h-16 bg-white/10 rounded-l-md blur-[1px]"></div>
+                                    <div className="absolute top-1/4 -right-4 w-1.5 h-12 bg-white/10 rounded-l-md blur-[1px]"></div>
+                                </div>
+
+                                {/* Floating Stat Chips */}
+                                <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-3xl shadow-2xl border border-blue-50 animate-in zoom-in duration-1000 hidden md:block z-20">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">⚡</div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase leading-none mb-1">Response Time</p>
+                                            <p className="text-sm font-black text-slate-900">{"< 1.2s"}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="absolute -top-6 -right-6 bg-slate-900 p-4 rounded-3xl shadow-2xl border border-white/10 animate-in slide-in-from-top-4 duration-1000 hidden md:block z-20">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs">99%</div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">Accuracy Rate</p>
+                                            <p className="text-sm font-black text-white italic">RAG Indexed</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
